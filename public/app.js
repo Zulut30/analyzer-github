@@ -577,19 +577,21 @@ function renderResult(payload) {
   const languages = normalizeArray(analysis.languages).length ? analysis.languages : payload.languages;
   const primaryLanguage = normalizeArray(languages)[0]?.name || repo.primaryLanguage || 'Code';
   const score = normalizeScore(analysis.score);
+  const shortSummary = cleanResultText(analysis.shortSummary, repo.description || 'Краткое описание не найдено.');
+  const purpose = cleanResultText(analysis.purpose, 'Назначение не удалось определить по доступным файлам.');
+  const essence = cleanResultText(analysis.essence, '');
+  const finalTakeaway = cleanResultText(analysis.finalTakeaway, shortSummary);
+  const detailedConclusion = cleanResultText(analysis.detailedConclusion, finalTakeaway);
 
   document.querySelector('#repo-link').innerHTML = repo.url
     ? `<a href="${escapeAttr(repo.url)}" target="_blank" rel="noreferrer">${escapeHtml(repo.fullName || repo.url)}</a>`
     : escapeHtml(repo.fullName || '');
   document.querySelector('#analysis-title').textContent = analysis.title || repo.fullName || 'Анализ репозитория';
-  document.querySelector('#short-summary').textContent =
-    analysis.shortSummary || repo.description || 'Краткое описание не найдено.';
-  document.querySelector('#purpose').textContent =
-    analysis.purpose || 'Назначение не удалось определить по доступным файлам.';
-  document.querySelector('#essence').textContent = analysis.essence || '';
-  document.querySelector('#final-takeaway').textContent = analysis.finalTakeaway || analysis.shortSummary || '';
-  document.querySelector('#detailed-conclusion').textContent =
-    analysis.detailedConclusion || analysis.finalTakeaway || analysis.shortSummary || '';
+  document.querySelector('#short-summary').textContent = shortSummary;
+  document.querySelector('#purpose').textContent = purpose;
+  document.querySelector('#essence').textContent = essence;
+  document.querySelector('#final-takeaway').textContent = finalTakeaway;
+  document.querySelector('#detailed-conclusion').textContent = detailedConclusion;
   document.querySelector('#score-value').textContent = `${score.value}/10`;
   document.querySelector('#score-reason').textContent = score.reason || 'Оценка сформирована по доступным файлам.';
   renderResultOverview(payload, primaryLanguage);
@@ -613,6 +615,21 @@ function renderResult(payload) {
 
   results.hidden = false;
   results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function cleanResultText(value, fallback = '') {
+  const text = String(value || '').replace(/<eos>\s*$/i, '').trim();
+  if (!text || looksLikeRawModelJson(text)) return fallback;
+  return text;
+}
+
+function looksLikeRawModelJson(text) {
+  const compact = String(text || '').trim();
+  return (
+    /^[{\[]\s*"?(title|shortSummary|purpose|essence|projectType|languages)"?\s*:/i.test(compact) ||
+    (compact.includes('"shortSummary"') && compact.includes('"purpose"')) ||
+    (compact.includes('"languages"') && compact.includes('"libraries"') && compact.includes('"score"'))
+  );
 }
 
 function renderResultOverview(payload, primaryLanguage) {

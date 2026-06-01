@@ -34,7 +34,7 @@ const GITHUB_OAUTH_CLIENT_SECRET = process.env.GITHUB_OAUTH_CLIENT_SECRET || pro
 const SESSION_SECRET = process.env.SESSION_SECRET || process.env.TIMEWEB_API_TOKEN || 'repo-scope-dev-session-secret';
 const ALLOWED_GITHUB_LOGIN = (process.env.ALLOWED_GITHUB_LOGIN || 'Zulut30').toLowerCase();
 const PORT = Number(process.env.PORT || 3000);
-const MODEL_MAX_OUTPUT_TOKENS = Number(process.env.TIMEWEB_MAX_OUTPUT_TOKENS || 2200);
+const MODEL_MAX_OUTPUT_TOKENS = Number(process.env.TIMEWEB_MAX_OUTPUT_TOKENS || 3000);
 const AI_CONTEXT_CHAR_LIMIT = Number(process.env.AI_CONTEXT_CHAR_LIMIT || 24000);
 const AI_MAX_SELECTED_FILES = Number(process.env.AI_MAX_SELECTED_FILES || 12);
 const AI_MAX_LISTED_FILES = Number(process.env.AI_MAX_LISTED_FILES || 160);
@@ -327,7 +327,7 @@ app.post('/api/analyze', async (req, res) => {
     const prompt = buildAnalysisPrompt(repository);
     const tokenUsage = buildTokenUsageEstimate(repository, prompt);
     const aiResult = await callTimewebAgent(prompt);
-    const parsedAnalysis = parseJsonFromModel(aiResult.text);
+    const parsedAnalysis = parseJsonFromModel(aiResult.text, { kind: 'analysis', context: repository });
 
     res.json({
       ok: true,
@@ -428,7 +428,7 @@ app.post('/api/compare', async (req, res) => {
       totalBudgetTokens: estimateTokens(prompt) + MODEL_MAX_OUTPUT_TOKENS
     };
     const aiResult = await callTimewebAgent(prompt);
-    const parsedComparison = parseJsonFromModel(aiResult.text);
+    const parsedComparison = parseJsonFromModel(aiResult.text, { kind: 'comparison' });
 
     res.json({
       ok: true,
@@ -1594,20 +1594,20 @@ function buildAnalysisPrompt(context) {
 {
   "title": "короткое имя/название проекта",
   "shortSummary": "1-2 предложения, зачем нужен репозиторий",
+  "score": {"value": 0, "label": "оценка по 10-балльной шкале", "reason": "почему такая оценка"},
   "purpose": "какую проблему решает и для кого",
   "essence": "главная идея и что происходит внутри",
   "projectType": {"label": "SaaS/CLI/library/backend API/frontend app/bot/AI-agent/template/infra/tooling/etc", "reason": "почему выбран этот тип"},
   "languages": [{"name": "язык", "percent": 0, "role": "роль в проекте"}],
   "libraries": [{"name": "библиотека или фреймворк", "ecosystem": "npm/pip/go/etc", "purpose": "зачем используется"}],
+  "weaknesses": ["слабое место, риск или ограничение проекта"],
+  "nextSteps": ["что сделать первым", "что проверить перед деплоем", "какие файлы открыть в первую очередь"],
   "architecture": ["ключевая часть архитектуры или папка"],
   "howToRun": ["практический шаг запуска, если он виден из файлов"],
   "keyFiles": [{"path": "путь", "reason": "почему важен"}],
   "audience": ["кому полезен проект"],
   "qualitySignals": ["что говорит о зрелости/рисках проекта"],
-  "score": {"value": 0, "label": "оценка по 10-балльной шкале", "reason": "почему такая оценка"},
-  "weaknesses": ["слабое место, риск или ограничение проекта"],
-  "nextSteps": ["что сделать первым", "что проверить перед деплоем", "какие файлы открыть в первую очередь"],
-  "detailedConclusion": "подробный итог в 2-4 абзаца: что это за проект, насколько он зрелый, стоит ли его использовать/изучать и с чего начать знакомство",
+  "detailedConclusion": "итог в 1-2 коротких абзаца: что это за проект, насколько он зрелый, стоит ли его использовать/изучать и с чего начать",
   "questions": ["что осталось неясным без глубокого чтения кода"],
   "finalTakeaway": "самая короткая суть репозитория"
 }
@@ -1619,6 +1619,9 @@ function buildAnalysisPrompt(context) {
 - Оценка score.value должна быть числом от 1 до 10. Оцени понятность, полноту документации, структуру, признаки поддержки, тесты/CI и риски.
 - В weaknesses пиши конкретные слабости. Если слабости не видны, напиши ограничения анализа: например мало файлов, нет README, не видны тесты.
 - Объясняй для пользователя, который хочет быстро понять репозиторий перед чтением кода.
+- Ответ должен быть компактным и обязательно завершаться закрывающей фигурной скобкой.
+- Ограничь массивы: languages до 6, libraries до 8, architecture/howToRun/keyFiles/weaknesses/nextSteps до 6 элементов.
+- Не пиши длинные абзацы внутри JSON: одно поле - максимум 2 коротких предложения.
 
 Метаданные:
 ${JSON.stringify(context.repo, null, 2)}
@@ -1822,45 +1825,277 @@ async function callNativeAgent(message, previousError) {
   return { text: content, usage: normalizeAiUsage(payload.usage || payload.data?.usage) };
 }
 
-function parseJsonFromModel(text) {
-  const raw = String(text || '').trim();
-  const cleaned = raw
-    .replace(/^```json\s*/i, '')
-    .replace(/^```\s*/i, '')
-    .replace(/```$/i, '')
-    .trim();
+function parseJsonFromModel(text, options = {}) {
+  const kind = options.kind || 'analysis';
+  const cleaned = cleanModelResponse(text);
+  const parsed = tryParseModelJson(cleaned);
 
-  const firstBrace = cleaned.indexOf('{');
-  const lastBrace = cleaned.lastIndexOf('}');
-
-  if (firstBrace >= 0 && lastBrace > firstBrace) {
-    const candidate = cleaned.slice(firstBrace, lastBrace + 1);
-    try {
-      return { provider: 'timeweb', data: JSON.parse(candidate) };
-    } catch {
-      // Fall through to raw output.
-    }
+  if (parsed) {
+    return {
+      provider: 'timeweb',
+      data: kind === 'comparison' ? normalizeComparisonShape(parsed) : normalizeAnalysisShape(parsed, options.context)
+    };
   }
 
   return {
     provider: 'timeweb',
-    data: {
-      title: 'Анализ репозитория',
-      shortSummary: cleaned.slice(0, 500),
-      purpose: '',
-      essence: cleaned,
-      languages: [],
-      libraries: [],
-      architecture: [],
-      howToRun: [],
-      keyFiles: [],
-      audience: [],
-      qualitySignals: [],
-      score: { value: 0, label: 'Нет оценки', reason: 'Модель вернула ответ не в JSON.' },
-      weaknesses: [],
-      detailedConclusion: cleaned,
-      questions: ['Модель вернула ответ не в JSON, поэтому он показан как исходный текст.'],
-      finalTakeaway: ''
-    }
+    data:
+      kind === 'comparison'
+        ? extractPartialComparison(cleaned)
+        : extractPartialAnalysis(cleaned, options.context)
   };
+}
+
+function cleanModelResponse(text) {
+  return String(text || '')
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/```$/i, '')
+    .replace(/<eos>\s*$/i, '')
+    .replace(/<\|end[^>]*\|>\s*$/i, '')
+    .trim();
+}
+
+function tryParseModelJson(cleaned) {
+  const candidates = [cleaned];
+  const firstBrace = cleaned.indexOf('{');
+  const lastBrace = cleaned.lastIndexOf('}');
+
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    candidates.push(cleaned.slice(firstBrace, lastBrace + 1));
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch {
+      // Try the next candidate.
+    }
+  }
+
+  return null;
+}
+
+function extractPartialAnalysis(cleaned, context) {
+  const data = {
+    title: extractJsonValue(cleaned, 'title'),
+    shortSummary: extractJsonValue(cleaned, 'shortSummary'),
+    purpose: extractJsonValue(cleaned, 'purpose'),
+    essence: extractJsonValue(cleaned, 'essence'),
+    projectType: extractJsonValue(cleaned, 'projectType'),
+    languages: extractJsonValue(cleaned, 'languages'),
+    libraries: extractJsonValue(cleaned, 'libraries'),
+    architecture: extractJsonValue(cleaned, 'architecture'),
+    howToRun: extractJsonValue(cleaned, 'howToRun'),
+    keyFiles: extractJsonValue(cleaned, 'keyFiles'),
+    audience: extractJsonValue(cleaned, 'audience'),
+    qualitySignals: extractJsonValue(cleaned, 'qualitySignals'),
+    score: extractJsonValue(cleaned, 'score'),
+    weaknesses: extractJsonValue(cleaned, 'weaknesses'),
+    nextSteps: extractJsonValue(cleaned, 'nextSteps'),
+    detailedConclusion: extractJsonValue(cleaned, 'detailedConclusion'),
+    questions: extractJsonValue(cleaned, 'questions'),
+    finalTakeaway: extractJsonValue(cleaned, 'finalTakeaway')
+  };
+
+  return normalizeAnalysisShape(
+    data,
+    context,
+    'Ответ модели был частично обрезан. RepoScope восстановил доступные поля из JSON; повторите анализ, если нужен полный отчёт.'
+  );
+}
+
+function extractPartialComparison(cleaned) {
+  return normalizeComparisonShape({
+    summary: extractJsonValue(cleaned, 'summary'),
+    dimensions: extractJsonValue(cleaned, 'dimensions'),
+    sharedStrengths: extractJsonValue(cleaned, 'sharedStrengths'),
+    tradeoffs: extractJsonValue(cleaned, 'tradeoffs'),
+    recommendation: extractJsonValue(cleaned, 'recommendation')
+  });
+}
+
+function extractJsonValue(source, key) {
+  const match = new RegExp(`"${escapeRegExp(key)}"\\s*:`, 'i').exec(source);
+  if (!match) return undefined;
+
+  let index = match.index + match[0].length;
+  while (/\s/.test(source[index] || '')) index += 1;
+
+  const end = findJsonValueEnd(source, index);
+  if (end <= index) return undefined;
+
+  try {
+    return JSON.parse(source.slice(index, end));
+  } catch {
+    return undefined;
+  }
+}
+
+function findJsonValueEnd(source, start) {
+  const first = source[start];
+  if (!first) return -1;
+
+  if (first === '"') {
+    let escaped = false;
+    for (let index = start + 1; index < source.length; index += 1) {
+      const char = source[index];
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === '"') {
+        return index + 1;
+      }
+    }
+    return -1;
+  }
+
+  if (first === '{' || first === '[') {
+    const stack = [first === '{' ? '}' : ']'];
+    let inString = false;
+    let escaped = false;
+
+    for (let index = start + 1; index < source.length; index += 1) {
+      const char = source[index];
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+        } else if (char === '\\') {
+          escaped = true;
+        } else if (char === '"') {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (char === '"') {
+        inString = true;
+      } else if (char === '{') {
+        stack.push('}');
+      } else if (char === '[') {
+        stack.push(']');
+      } else if (char === stack[stack.length - 1]) {
+        stack.pop();
+        if (!stack.length) return index + 1;
+      }
+    }
+    return -1;
+  }
+
+  const primitiveEnd = source.slice(start).search(/[\s,}\]]/);
+  return primitiveEnd === -1 ? source.length : start + primitiveEnd;
+}
+
+function normalizeAnalysisShape(data, context, parseWarning = '') {
+  const repo = context?.repo || {};
+  const fallbackSummary = repo.description || 'Краткое описание не найдено.';
+  const questions = normalizeArrayForModel(data.questions);
+  if (parseWarning) questions.unshift(parseWarning);
+
+  return {
+    title: cleanModelField(data.title) || repo.fullName || 'Анализ репозитория',
+    shortSummary: cleanModelField(data.shortSummary) || cleanModelField(data.summary) || fallbackSummary,
+    purpose: cleanModelField(data.purpose) || 'Назначение не удалось определить по доступным файлам.',
+    essence: cleanModelField(data.essence) || cleanModelField(data.finalTakeaway) || '',
+    projectType: normalizeProjectTypeShape(data.projectType),
+    languages: normalizeModelObjectArray(data.languages).slice(0, 8),
+    libraries: normalizeModelObjectArray(data.libraries).slice(0, 12),
+    architecture: normalizeArrayForModel(data.architecture).slice(0, 10),
+    howToRun: normalizeArrayForModel(data.howToRun).slice(0, 8),
+    keyFiles: normalizeModelObjectArray(data.keyFiles).slice(0, 10),
+    audience: normalizeArrayForModel(data.audience).slice(0, 8),
+    qualitySignals: normalizeArrayForModel(data.qualitySignals).slice(0, 8),
+    score: normalizeModelScore(data.score, context, Boolean(parseWarning)),
+    weaknesses: normalizeArrayForModel(data.weaknesses).slice(0, 8),
+    nextSteps: normalizeArrayForModel(data.nextSteps).slice(0, 6),
+    detailedConclusion: cleanModelField(data.detailedConclusion) || cleanModelField(data.finalTakeaway) || '',
+    questions: questions.slice(0, 8),
+    finalTakeaway: cleanModelField(data.finalTakeaway) || cleanModelField(data.shortSummary) || '',
+    parseWarning
+  };
+}
+
+function normalizeComparisonShape(data) {
+  return {
+    summary: cleanModelField(data.summary) || 'Сравнение сформировано по доступному контексту.',
+    dimensions: normalizeModelObjectArray(data.dimensions).slice(0, 8),
+    sharedStrengths: normalizeArrayForModel(data.sharedStrengths).slice(0, 8),
+    tradeoffs: normalizeArrayForModel(data.tradeoffs).slice(0, 8),
+    recommendation:
+      data.recommendation && typeof data.recommendation === 'object'
+        ? data.recommendation
+        : { choice: 'Зависит от задачи', reason: '' }
+  };
+}
+
+function cleanModelField(value) {
+  if (value === null || value === undefined || typeof value === 'object') return '';
+  return cleanText(value).replace(/<eos>\s*$/i, '');
+}
+
+function normalizeArrayForModel(value) {
+  if (!Array.isArray(value)) return typeof value === 'string' && value.trim() ? [value.trim()] : [];
+  return value
+    .map((item) => (typeof item === 'object' ? cleanModelField(item?.text || item?.name || item?.reason) : cleanModelField(item)))
+    .filter(Boolean);
+}
+
+function normalizeModelObjectArray(value) {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item) => item && typeof item === 'object');
+}
+
+function normalizeProjectTypeShape(value) {
+  if (value && typeof value === 'object') {
+    return {
+      label: cleanModelField(value.label || value.type) || 'Repository / codebase',
+      reason: cleanModelField(value.reason || value.description)
+    };
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    return { label: value.trim(), reason: 'Тип определён по ответу модели.' };
+  }
+
+  return { label: 'Repository / codebase', reason: 'Тип не был явно указан в ответе модели.' };
+}
+
+function normalizeModelScore(score, context, approximate) {
+  const rawValue = typeof score === 'number' ? score : score?.value;
+  const numeric = Math.round(Number(rawValue));
+  if (Number.isFinite(numeric) && numeric >= 1 && numeric <= 10) {
+    return {
+      value: numeric,
+      label: cleanModelField(score?.label || 'Оценка'),
+      reason: cleanModelField(score?.reason || score?.label || 'Оценка сформирована по доступным файлам.')
+    };
+  }
+
+  return {
+    value: estimateFallbackScore(context),
+    label: approximate ? 'Предварительная оценка' : 'Оценка',
+    reason: approximate
+      ? 'Ответ модели оборвался до поля оценки, поэтому показана предварительная оценка по структуре репозитория. Повторите анализ для точного результата.'
+      : 'Модель не вернула числовую оценку, поэтому показана предварительная оценка по структуре репозитория.'
+  };
+}
+
+function estimateFallbackScore(context) {
+  const repo = context?.repo || {};
+  const paths = (context?.filePaths || []).map((item) => String(item).toLowerCase());
+  let score = 5;
+
+  if (paths.some((item) => /(^|\/)readme\./.test(item))) score += 1;
+  if (paths.some((item) => /package\.json|requirements\.txt|pyproject\.toml|go\.mod|cargo\.toml|composer\.json/.test(item))) score += 1;
+  if (paths.some((item) => /(^|\/)(test|tests|__tests__)\//.test(item) || /\.test\.|\.spec\./.test(item))) score += 1;
+  if (paths.some((item) => item.startsWith('.github/workflows/'))) score += 1;
+  if (!repo.license) score -= 1;
+
+  return Math.max(3, Math.min(8, score));
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
