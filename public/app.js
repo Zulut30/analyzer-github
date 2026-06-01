@@ -16,6 +16,14 @@ const clearHistory = document.querySelector('#clear-history');
 const historySearch = document.querySelector('#history-search');
 const themeToggle = document.querySelector('#theme-toggle');
 const themeLabel = document.querySelector('#theme-label');
+const themeMenu = document.querySelector('#theme-menu');
+const themeMenuPanel = document.querySelector('#theme-menu-panel');
+const themeGrid = document.querySelector('#theme-grid');
+const profileMenu = document.querySelector('#profile-menu');
+const profileMenuButton = document.querySelector('#profile-menu-button');
+const profileMenuPanel = document.querySelector('#profile-menu-panel');
+const profileMenuAvatar = document.querySelector('#profile-menu-avatar');
+const profileMenuStatus = document.querySelector('#profile-menu-status');
 const favoriteToggleButton = document.querySelector('#toggle-favorite');
 const copyWeaknessesButton = document.querySelector('#copy-weaknesses');
 const copyPromptButton = document.querySelector('#copy-prompt');
@@ -28,6 +36,7 @@ const heroLanguageImages = document.querySelectorAll('[data-hero-language]');
 const historyKey = 'repoScope.history.v2';
 const favoritesKey = 'repoScope.favorites.v1';
 const themeKey = 'repoScope.theme';
+const openMenuClass = 'is-open';
 let currentPayload = null;
 let authState = { authenticated: false, user: null, oauthConfigured: false, canAnalyze: false, allowedLogin: 'zulut30' };
 let profileReposState = { status: 'idle', repositories: [], error: '' };
@@ -40,14 +49,13 @@ let profileStateTimer = null;
 const themes = [
   { id: 'light', label: 'Светлая' },
   { id: 'dark', label: 'Тёмная' },
-  { id: 'sky', label: 'Синяя' },
-  { id: 'graphite', label: 'Графит' },
-  { id: 'aurora', label: 'Аврора' },
-  { id: 'frost', label: 'Стекло' },
-  { id: 'rose', label: 'Роза' },
+  { id: 'graphite', label: 'Сумерки' },
+  { id: 'aurora', label: 'Нефрит' },
+  { id: 'sky', label: 'Индиго' },
+  { id: 'rose', label: 'Розовый' },
   { id: 'ember', label: 'Янтарь' },
-  { id: 'violet', label: 'Ирис' },
-  { id: 'mono', label: 'Моно' }
+  { id: 'frost', label: 'Океан' },
+  { id: 'violet', label: 'Фиолетовая' }
 ];
 
 const themeColors = {
@@ -170,7 +178,9 @@ const languageMeta = {
 };
 
 input.value = '';
+renderThemeOptions();
 applyTheme(localStorage.getItem(themeKey) || 'light');
+updateHeaderProfile();
 renderHeroImages();
 renderAllHistory();
 renderFavoritesPage();
@@ -180,11 +190,12 @@ updateAnalyzeAccessUI();
 
 window.addEventListener('popstate', syncRoute);
 
-document.querySelectorAll('[data-route]').forEach((link) => {
-  link.addEventListener('click', (event) => {
-    event.preventDefault();
-    navigate(link.getAttribute('data-route') || '/');
-  });
+document.addEventListener('click', (event) => {
+  const routeLink = event.target.closest('[data-route]');
+  if (!routeLink) return;
+  event.preventDefault();
+  closeHeaderMenus();
+  navigate(routeLink.getAttribute('data-route') || '/');
 });
 
 document.querySelectorAll('[data-example]').forEach((example) => {
@@ -194,11 +205,23 @@ document.querySelectorAll('[data-example]').forEach((example) => {
   });
 });
 
-themeToggle.addEventListener('click', () => {
-  const current = document.documentElement.dataset.theme || themes[0].id;
-  const currentIndex = themes.findIndex((theme) => theme.id === current);
-  const next = themes[(currentIndex + 1) % themes.length].id;
-  applyTheme(next);
+themeToggle.addEventListener('click', (event) => {
+  event.stopPropagation();
+  toggleThemeMenu();
+});
+
+profileMenuButton.addEventListener('click', (event) => {
+  event.stopPropagation();
+  toggleProfileMenu();
+});
+
+document.addEventListener('click', (event) => {
+  if (themeMenu?.contains(event.target) || profileMenu?.contains(event.target)) return;
+  closeHeaderMenus();
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeHeaderMenus();
 });
 
 form.addEventListener('submit', async (event) => {
@@ -316,9 +339,108 @@ function applyTheme(theme) {
   document.documentElement.dataset.theme = selectedTheme.id;
   localStorage.setItem(themeKey, selectedTheme.id);
   themeLabel.textContent = theme === 'dark' ? 'Темная' : 'Светлая';
-  themeLabel.textContent = selectedTheme.label;
+  themeLabel.textContent = 'Тема';
+  renderThemeOptions();
   const themeColorMeta = document.querySelector('meta[name="theme-color"]');
   if (themeColorMeta) themeColorMeta.setAttribute('content', themeColors[selectedTheme.id] || themeColors.dark);
+}
+
+function renderThemeOptions() {
+  if (!themeGrid) return;
+  const selectedTheme = document.documentElement.dataset.theme || localStorage.getItem(themeKey) || themes[0].id;
+  themeGrid.innerHTML = themes
+    .map((theme) => `
+      <button class="theme-option ${theme.id === selectedTheme ? 'is-selected' : ''}" type="button" data-theme-option="${escapeAttr(theme.id)}" aria-pressed="${theme.id === selectedTheme}">
+        <span class="theme-swatch theme-swatch-${escapeAttr(theme.id)}" aria-hidden="true"></span>
+        <span>${escapeHtml(theme.label)}</span>
+      </button>
+    `)
+    .join('');
+
+  themeGrid.querySelectorAll('[data-theme-option]').forEach((option) => {
+    option.addEventListener('click', () => {
+      applyTheme(option.dataset.themeOption || themes[0].id);
+      closeHeaderMenus();
+    });
+  });
+}
+
+function toggleThemeMenu() {
+  const nextOpen = !themeMenu?.classList.contains(openMenuClass);
+  closeHeaderMenus();
+  setMenuOpen(themeMenu, themeMenuPanel, themeToggle, nextOpen);
+}
+
+function toggleProfileMenu() {
+  const nextOpen = !profileMenu?.classList.contains(openMenuClass);
+  closeHeaderMenus();
+  updateHeaderProfile();
+  setMenuOpen(profileMenu, profileMenuPanel, profileMenuButton, nextOpen);
+}
+
+function closeHeaderMenus() {
+  setMenuOpen(themeMenu, themeMenuPanel, themeToggle, false);
+  setMenuOpen(profileMenu, profileMenuPanel, profileMenuButton, false);
+}
+
+function setMenuOpen(menu, panel, trigger, isOpen) {
+  if (!menu || !panel || !trigger) return;
+  menu.classList.toggle(openMenuClass, isOpen);
+  panel.hidden = !isOpen;
+  trigger.setAttribute('aria-expanded', String(isOpen));
+}
+
+function updateHeaderProfile() {
+  if (!profileMenuAvatar || !profileMenuPanel) return;
+
+  const user = getProfileDisplayUser();
+  const isSignedIn = Boolean(authState.authenticated && user?.login);
+  profileMenuAvatar.src = user.avatarUrl || getEmojiImageSrc('github');
+  profileMenuAvatar.alt = isSignedIn ? `@${user.login}` : '';
+  profileMenuStatus?.classList.toggle('is-online', Boolean(authState.canAnalyze));
+
+  profileMenuPanel.innerHTML = isSignedIn ? renderSignedInProfileMenu(user) : renderSignedOutProfileMenu();
+}
+
+function renderSignedInProfileMenu(user) {
+  const profileUrl = user.profileUrl || `https://github.com/${user.login}`;
+  const roleText = authState.canAnalyze ? 'Доступ к анализу открыт' : accessDeniedMessage();
+  return `
+    <div class="profile-menu-user">
+      <img src="${escapeAttr(user.avatarUrl || getEmojiImageSrc('github'))}" alt="" />
+      <div>
+        <span>${escapeHtml(user.name || user.login)}</span>
+        <a href="${escapeAttr(profileUrl)}" target="_blank" rel="noreferrer">@${escapeHtml(user.login)}</a>
+      </div>
+    </div>
+    <p class="profile-menu-note">${escapeHtml(roleText)}</p>
+    <div class="profile-menu-links">
+      <a href="/profile" data-route="/profile">Профиль</a>
+      <a href="/history" data-route="/history">История</a>
+      <a href="/favorites" data-route="/favorites">Избранное</a>
+    </div>
+    <form class="profile-menu-logout" method="post" action="/auth/logout">
+      <button type="submit">Выйти</button>
+    </form>
+  `;
+}
+
+function renderSignedOutProfileMenu() {
+  const title = authState.oauthConfigured ? 'GitHub профиль' : 'OAuth не настроен';
+  const copy = authState.oauthConfigured
+    ? `Войдите как ${authState.allowedLogin || 'Zulut30'}, чтобы открыть анализ и синхронизацию.`
+    : 'Сначала подключите GitHub OAuth App на сервере.';
+
+  return `
+    <div class="profile-menu-user">
+      <img src="${escapeAttr(getEmojiImageSrc('github'))}" alt="" />
+      <div>
+        <span>${escapeHtml(title)}</span>
+        <small>${escapeHtml(copy)}</small>
+      </div>
+    </div>
+    ${authState.oauthConfigured ? '<a class="profile-menu-login" href="/auth/github">Войти через GitHub</a>' : '<span class="profile-menu-login is-disabled">Вход недоступен</span>'}
+  `;
 }
 
 function setLoading(isLoading) {
@@ -906,6 +1028,7 @@ async function loadProfile() {
   }
 
   renderProfile();
+  updateHeaderProfile();
   updateAnalyzeAccessUI();
   if (canUseAnalyzer()) {
     const loginKey = String(authState.user?.login || '').toLowerCase();
@@ -951,6 +1074,7 @@ async function loadProfileActivity() {
           ...payload.user
         }
       };
+      updateHeaderProfile();
     }
   } catch (error) {
     profileActivityState = {

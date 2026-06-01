@@ -5,15 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>RepoScope - анализ GitHub репозиториев</title>
     <meta name="theme-color" content="#0d1417" />
-    <link rel="icon" href="/favicon.ico?v=22" sizes="any" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=22" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=22" />
-    <link rel="stylesheet" href="/styles.css?v=22" />
+    <link rel="icon" href="/favicon.ico?v=24" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=24" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=24" />
+    <link rel="stylesheet" href="/styles.css?v=24" />
   </head>
   <body>
     <div class="app-shell">
       <header class="app-header">
         <a class="brand" href="/" data-route="/">
+          <span class="brand-mark" aria-hidden="true"></span>
           <span>
             <strong>RepoScope</strong>
             <small>GitHub analyzer</small>
@@ -21,16 +22,39 @@
         </a>
 
         <nav class="main-nav" aria-label="Основная навигация">
-          <a href="/" data-route="/">Анализ</a>
-          <a href="/history" data-route="/history">История</a>
-          <a href="/favorites" data-route="/favorites">Избранное</a>
-          <a href="/profile" data-route="/profile">Профиль</a>
+          <a href="/" data-route="/"><span class="nav-icon nav-icon-search" aria-hidden="true"></span><span>Анализ</span></a>
+          <a href="/history" data-route="/history"><span class="nav-icon nav-icon-history" aria-hidden="true"></span><span>История</span></a>
+          <a href="/favorites" data-route="/favorites"><span class="nav-icon nav-icon-star" aria-hidden="true"></span><span>Избранное</span></a>
+          <a href="/profile" data-route="/profile"><span class="nav-icon nav-icon-user" aria-hidden="true"></span><span>Профиль</span></a>
         </nav>
 
-        <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Переключить тему">
-          <span class="sun-icon" aria-hidden="true"></span>
-          <span id="theme-label">Светлая</span>
-        </button>
+        <div class="header-actions">
+          <div class="theme-menu" id="theme-menu">
+            <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Выбрать тему" aria-haspopup="true" aria-expanded="false" aria-controls="theme-menu-panel">
+              <span class="theme-dot" aria-hidden="true"></span>
+              <span id="theme-label">Тема</span>
+              <span class="chevron-icon" aria-hidden="true"></span>
+            </button>
+            <div class="theme-popover" id="theme-menu-panel" hidden>
+              <div class="popover-heading">
+                <span>Выберите тему</span>
+                <span class="sun-icon" aria-hidden="true"></span>
+              </div>
+              <div class="theme-grid" id="theme-grid"></div>
+            </div>
+          </div>
+
+          <div class="profile-menu" id="profile-menu">
+            <button class="profile-menu-button" id="profile-menu-button" type="button" aria-label="Открыть профиль" aria-haspopup="true" aria-expanded="false" aria-controls="profile-menu-panel">
+              <span class="profile-avatar-shell">
+                <img id="profile-menu-avatar" src="/assets/emoji/github.png" alt="" />
+                <span id="profile-menu-status" class="profile-status-dot"></span>
+              </span>
+              <span class="chevron-icon" aria-hidden="true"></span>
+            </button>
+            <div class="profile-popover" id="profile-menu-panel" hidden></div>
+          </div>
+        </div>
       </header>
 
       <main>
@@ -223,6 +247,6 @@
       <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
     </div>
 
-    <script src="/app.js?v=22"></script>
+    <script src="/app.js?v=24"></script>
   </body>
 </html>
