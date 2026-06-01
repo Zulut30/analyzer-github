@@ -252,7 +252,7 @@ form.addEventListener('submit', async (event) => {
       body: JSON.stringify({ repoUrl })
     });
 
-    const payload = await response.json();
+    const payload = await readApiResponse(response);
     if (!response.ok || !payload.ok) {
       throw new Error(payload.error || 'Неизвестная ошибка анализа');
     }
@@ -265,6 +265,24 @@ form.addEventListener('submit', async (event) => {
     setLoading(false);
   }
 });
+
+async function readApiResponse(response) {
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    return response.json();
+  }
+
+  const text = await response.text().catch(() => '');
+  const isHtml = /<!doctype html|<html[\s>]/i.test(text);
+  const statusText = `${response.status} ${response.statusText || ''}`.trim();
+
+  return {
+    ok: false,
+    error: isHtml
+      ? `API вернул HTML-страницу вместо JSON (${statusText}). Обновите страницу и попробуйте снова.`
+      : `API вернул неожиданный ответ (${statusText}). Обновите страницу и попробуйте снова.`
+  };
+}
 
 clearHistory.addEventListener('click', () => {
   localStorage.removeItem(historyKey);

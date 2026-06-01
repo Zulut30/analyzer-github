@@ -48,6 +48,19 @@ const sessions = loadSessionStore();
 
 app.use(compression({ threshold: 1024 }));
 app.use(express.json({ limit: '5mb' }));
+app.use((error, req, res, next) => {
+  if (!error) return next();
+
+  const isJsonParseError = error.type === 'entity.parse.failed' || error instanceof SyntaxError;
+  if (isJsonParseError && req.path.startsWith('/api/')) {
+    return res.status(400).json({
+      ok: false,
+      error: 'Некорректный JSON в запросе. Обновите страницу и попробуйте снова.'
+    });
+  }
+
+  return next(error);
+});
 app.use(
   '/assets',
   express.static(path.join(PUBLIC_DIR, 'assets'), {
