@@ -29,7 +29,18 @@ const copyWeaknessesButton = document.querySelector('#copy-weaknesses');
 const copyPromptButton = document.querySelector('#copy-prompt');
 const copyPromptInlineButton = document.querySelector('#copy-prompt-inline');
 const llmPromptField = document.querySelector('#llm-prompt');
+const shareAnalysisButton = document.querySelector('#share-analysis');
 const toast = document.querySelector('#toast');
+const progressSteps = document.querySelector('#progress-steps');
+const resultModeButtons = document.querySelectorAll('[data-result-mode]');
+const compareForm = document.querySelector('#compare-form');
+const compareRepoA = document.querySelector('#compare-repo-a');
+const compareRepoB = document.querySelector('#compare-repo-b');
+const compareButton = document.querySelector('#compare-button');
+const compareStatus = document.querySelector('#compare-status');
+const compareError = document.querySelector('#compare-error');
+const compareErrorCopy = document.querySelector('#compare-error-copy');
+const compareResults = document.querySelector('#compare-results');
 const heroRepoImage = document.querySelector('#hero-repo-image');
 const heroLanguageImages = document.querySelectorAll('[data-hero-language]');
 
@@ -45,6 +56,9 @@ let profileRepoQuery = '';
 let profileStateStatus = 'idle';
 let profileStateLoadedFor = '';
 let profileStateTimer = null;
+let progressTimer = null;
+let progressStepIndex = 0;
+let currentShareId = '';
 
 const themes = [
   { id: 'light', label: 'Светлая' },
@@ -226,8 +240,12 @@ document.addEventListener('keydown', (event) => {
 
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
-  const repoUrl = input.value.trim();
-  if (!repoUrl) return;
+  analyzeRepository(input.value.trim());
+});
+
+async function analyzeRepository(repoUrl, options = {}) {
+  const normalizedUrl = String(repoUrl || '').trim();
+  if (!normalizedUrl) return;
 
   if (!canUseAnalyzer()) {
     showError(accessDeniedMessage());
@@ -235,21 +253,19 @@ form.addEventListener('submit', async (event) => {
     return;
   }
 
+  navigate('/');
+  input.value = normalizedUrl;
   setLoading(true);
   hideError();
   results.hidden = true;
-  setStatus('Готовлю контекст', 'Забираю метаданные, дерево файлов и важные манифесты с GitHub.');
-
-  window.setTimeout(() => {
-    if (!button.disabled) return;
-    setStatus('Спрашиваю Grok Code Fast', 'Передаю сжатое описание репозитория агенту Timeweb.');
-  }, 1800);
+  startProgressTimeline();
+  setStatus('Готовлю контекст', 'Получаю README, языки, манифесты и структуру файлов.');
 
   try {
     const response = await fetch('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repoUrl })
+      body: JSON.stringify({ repoUrl: normalizedUrl })
     });
 
     const payload = await readApiResponse(response);
@@ -259,12 +275,44 @@ form.addEventListener('submit', async (event) => {
 
     renderResult(payload);
     saveHistory(payload);
+    if (options.toast) showToast(options.toast);
   } catch (error) {
     showError(error.message);
   } finally {
     setLoading(false);
   }
-});
+}
+
+function startProgressTimeline() {
+  progressStepIndex = 0;
+  updateProgressSteps(0);
+  window.clearInterval(progressTimer);
+  progressTimer = window.setInterval(() => {
+    progressStepIndex = Math.min(progressStepIndex + 1, 3);
+    updateProgressSteps(progressStepIndex);
+
+    if (progressStepIndex === 1) {
+      setStatus('Смотрю стек', 'Проверяю языки, package-файлы, зависимости и признаки фреймворков.');
+    } else if (progressStepIndex === 2) {
+      setStatus('Изучаю структуру', 'Сопоставляю директории, ключевые файлы, CI и признаки зрелости проекта.');
+    } else if (progressStepIndex === 3) {
+      setStatus('Формирую вывод', 'Grok Code Fast собирает краткий итог, риски, оценку и следующие шаги.');
+    }
+  }, 1600);
+}
+
+function stopProgressTimeline() {
+  window.clearInterval(progressTimer);
+  progressTimer = null;
+  updateProgressSteps(-1);
+}
+
+function updateProgressSteps(activeIndex) {
+  progressSteps?.querySelectorAll('[data-progress-step]').forEach((step, index) => {
+    step.classList.toggle('is-done', index < activeIndex);
+    step.classList.toggle('is-active', index === activeIndex);
+  });
+}
 
 async function readApiResponse(response) {
   const contentType = response.headers.get('content-type') || '';
@@ -301,6 +349,15 @@ copyWeaknessesButton.addEventListener('click', () => {
 copyPromptButton.addEventListener('click', copyCurrentPrompt);
 copyPromptInlineButton.addEventListener('click', copyCurrentPrompt);
 favoriteToggleButton.addEventListener('click', toggleCurrentFavorite);
+shareAnalysisButton?.addEventListener('click', shareCurrentAnalysis);
+resultModeButtons.forEach((modeButton) => {
+  modeButton.addEventListener('click', () => setResultMode(modeButton.dataset.resultMode || 'brief'));
+});
+
+compareForm?.addEventListener('submit', (event) => {
+  event.preventDefault();
+  compareRepositories(compareRepoA?.value || '', compareRepoB?.value || '');
+});
 
 document.querySelectorAll('[data-export-format]').forEach((exportButton) => {
   exportButton.addEventListener('click', () => exportAnalysis(exportButton.dataset.exportFormat));
@@ -335,9 +392,12 @@ function navigate(path) {
 
 function syncRoute() {
   const path = window.location.pathname;
-  const activeRoute = path === '/history' || path === '/favorites' || path === '/profile' ? path : '/';
+  const isShareRoute = path.startsWith('/share/');
+  const activeRoute =
+    path === '/history' || path === '/favorites' || path === '/profile' || path === '/compare' ? path : '/';
 
   document.querySelector('#analysis-view').hidden = activeRoute !== '/';
+  document.querySelector('#compare-view').hidden = activeRoute !== '/compare';
   document.querySelector('#history-view').hidden = activeRoute !== '/history';
   document.querySelector('#favorites-view').hidden = activeRoute !== '/favorites';
   document.querySelector('#profile-view').hidden = activeRoute !== '/profile';
@@ -350,6 +410,8 @@ function syncRoute() {
   if (activeRoute === '/history') renderHistoryPage();
   if (activeRoute === '/favorites') renderFavoritesPage();
   if (activeRoute === '/profile') renderProfile();
+  if (isShareRoute) loadSharedAnalysis(path.split('/').filter(Boolean)[1] || '');
+  if (!isShareRoute) currentShareId = '';
 }
 
 function applyTheme(theme) {
@@ -467,6 +529,7 @@ function setLoading(isLoading) {
     ? 'Анализирую...'
     : '<span class="button-icon" aria-hidden="true"></span>Анализировать';
   statusPanel.hidden = !isLoading;
+  if (!isLoading) stopProgressTimeline();
 }
 
 function setStatus(title, copy) {
@@ -529,6 +592,8 @@ function renderResult(payload) {
     analysis.detailedConclusion || analysis.finalTakeaway || analysis.shortSummary || '';
   document.querySelector('#score-value').textContent = `${score.value}/10`;
   document.querySelector('#score-reason').textContent = score.reason || 'Оценка сформирована по доступным файлам.';
+  renderResultOverview(payload, primaryLanguage);
+  renderList('#next-steps-list', analysis.nextSteps);
   llmPromptField.value = buildFixPrompt(payload);
 
   renderRepoArt(repo, primaryLanguage);
@@ -544,9 +609,75 @@ function renderResult(payload) {
   renderList('#quality-list', analysis.qualitySignals);
   renderQuestions(analysis.questions);
   syncFavoriteButton();
+  setResultMode(results.dataset.mode || 'brief');
 
   results.hidden = false;
   results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderResultOverview(payload, primaryLanguage) {
+  const analysis = payload.analysis || {};
+  const repo = payload.repo || {};
+  const libraries = normalizeArray(analysis.libraries);
+  const languages = normalizeArray(analysis.languages).length ? analysis.languages : payload.languages;
+  const nextSteps = normalizeArray(analysis.nextSteps);
+  const projectType = normalizeProjectType(analysis.projectType, payload);
+  const stackItems = [
+    primaryLanguage,
+    ...normalizeArray(languages)
+      .map((item) => item.name)
+      .filter(Boolean)
+      .slice(1, 3),
+    ...libraries.map((item) => item.name).filter(Boolean).slice(0, 3)
+  ].filter(Boolean);
+
+  document.querySelector('#project-type').textContent = projectType.label;
+  document.querySelector('#project-type-reason').textContent = projectType.reason;
+  document.querySelector('#stack-summary').textContent = stackItems.slice(0, 4).join(' + ') || repo.primaryLanguage || 'Стек не определён';
+  document.querySelector('#stack-detail').textContent =
+    libraries.length > 0
+      ? `Видимые зависимости: ${libraries.map((item) => item.name).filter(Boolean).slice(0, 5).join(', ')}.`
+      : 'Библиотеки будут видны, если они есть в README или manifest-файлах.';
+  document.querySelector('#next-step-primary').textContent = nextSteps[0] || 'Изучить ключевые файлы и слабые места';
+  document.querySelector('#next-step-detail').textContent =
+    nextSteps[1] || analysis.finalTakeaway || 'Начните с README, manifest-файлов и списка рисков в подробном режиме.';
+}
+
+function normalizeProjectType(value, payload) {
+  if (value && typeof value === 'object') {
+    return {
+      label: String(value.label || value.type || 'Проект').trim() || 'Проект',
+      reason: String(value.reason || value.description || '').trim()
+    };
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    return { label: value.trim(), reason: 'Тип определён AI по README, manifest-файлам и структуре проекта.' };
+  }
+
+  const repo = payload?.repo || {};
+  const fileStats = payload?.fileStats || {};
+  const paths = normalizeArray(fileStats.topDirectories).map((item) => item.name).join(' ').toLowerCase();
+  const language = String(repo.primaryLanguage || normalizeArray(payload?.languages)[0]?.name || '').toLowerCase();
+  const topics = normalizeArray(repo.topics).join(' ').toLowerCase();
+  const haystack = `${paths} ${language} ${topics}`;
+
+  if (/cli|cmd|bin|shell|powershell/.test(haystack)) return { label: 'CLI / tooling', reason: 'В структуре или темах видны признаки командного инструмента.' };
+  if (/bot|telegram|discord|slack/.test(haystack)) return { label: 'Bot / automation', reason: 'Темы или файлы похожи на автоматизацию или бота.' };
+  if (/api|server|backend|fastapi|express|django/.test(haystack)) return { label: 'Backend API', reason: 'Есть признаки серверного API или backend-фреймворка.' };
+  if (/react|vue|svelte|next|app|pages|frontend/.test(haystack)) return { label: 'Frontend app', reason: 'Есть признаки клиентского приложения или UI-фреймворка.' };
+  if (/library|package|sdk|crate|module/.test(haystack)) return { label: 'Library / SDK', reason: 'Репозиторий похож на переиспользуемый пакет или модуль.' };
+  if (/docker|infra|helm|terraform|k8s/.test(haystack)) return { label: 'Infrastructure', reason: 'Видны признаки инфраструктурного проекта.' };
+  return { label: 'Repository / codebase', reason: 'Тип неочевиден без более глубокого чтения кода.' };
+}
+
+function setResultMode(mode) {
+  const selectedMode = mode === 'expert' ? 'expert' : 'brief';
+  if (results) results.dataset.mode = selectedMode;
+  resultModeButtons.forEach((buttonElement) => {
+    buttonElement.classList.toggle('is-active', buttonElement.dataset.resultMode === selectedMode);
+    buttonElement.setAttribute('aria-pressed', String(buttonElement.dataset.resultMode === selectedMode));
+  });
 }
 
 function renderRepoArt(repo, language) {
@@ -814,9 +945,7 @@ function renderHistoryPage() {
   historyPageList.querySelectorAll('[data-repeat-history]').forEach((buttonElement) => {
     buttonElement.addEventListener('click', () => {
       const saved = items[Number(buttonElement.dataset.repeatHistory)];
-      input.value = saved?.repoUrl || '';
-      navigate('/');
-      input.focus();
+      analyzeRepository(saved?.repoUrl || saved?.payload?.repo?.url || '', { toast: 'Запускаю повторный анализ' });
     });
   });
 
@@ -1021,6 +1150,115 @@ function renderFavoritesPage() {
       showToast('Удалено из избранного');
     });
   });
+}
+
+async function compareRepositories(repoA, repoB) {
+  const firstRepo = String(repoA || '').trim();
+  const secondRepo = String(repoB || '').trim();
+
+  if (!firstRepo || !secondRepo) return;
+
+  if (!canUseAnalyzer()) {
+    showCompareError(accessDeniedMessage());
+    navigate('/profile');
+    return;
+  }
+
+  compareButton.disabled = true;
+  compareButton.textContent = 'Сравниваю...';
+  compareStatus.hidden = false;
+  compareError.hidden = true;
+  compareResults.hidden = true;
+
+  try {
+    const response = await fetch('/api/compare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repoA: firstRepo, repoB: secondRepo })
+    });
+    const payload = await readApiResponse(response);
+    if (!response.ok || !payload.ok) {
+      throw new Error(payload.error || 'Не удалось сравнить репозитории');
+    }
+
+    renderComparison(payload);
+  } catch (error) {
+    showCompareError(error.message);
+  } finally {
+    compareButton.disabled = false;
+    compareButton.textContent = 'Сравнить';
+    compareStatus.hidden = true;
+  }
+}
+
+function showCompareError(message) {
+  if (!compareError || !compareErrorCopy) return;
+  compareErrorCopy.textContent = message;
+  compareError.hidden = false;
+}
+
+function renderComparison(payload) {
+  if (!compareResults) return;
+
+  const comparison = payload.comparison || {};
+  const repos = payload.repos || [];
+  const winner = comparison.recommendation || {};
+  const dimensions = normalizeArray(comparison.dimensions);
+  const shared = normalizeArray(comparison.sharedStrengths);
+  const tradeoffs = normalizeArray(comparison.tradeoffs);
+
+  compareResults.innerHTML = `
+    <div class="compare-summary">
+      ${repos
+        .map((repo, index) => `
+          <article>
+            <span>${index === 0 ? 'Первый' : 'Второй'} репозиторий</span>
+            <strong>${escapeHtml(repo.fullName || repo.url || 'Репозиторий')}</strong>
+            <p>${escapeHtml(repo.description || repo.primaryLanguage || 'Описание не найдено')}</p>
+          </article>
+        `)
+        .join('')}
+      <article>
+        <span>Рекомендация</span>
+        <strong>${escapeHtml(winner.choice || 'Зависит от задачи')}</strong>
+        <p>${escapeHtml(winner.reason || comparison.summary || 'Сравнение готово.')}</p>
+      </article>
+    </div>
+
+    <div class="compare-grid">
+      <article class="result-card span-2">
+        <h3>Главный вывод</h3>
+        <p>${escapeHtml(comparison.summary || 'Репозитории отличаются стеком, зрелостью и назначением.')}</p>
+      </article>
+      ${dimensions
+        .slice(0, 8)
+        .map((item) => `
+          <article class="result-card compare-dimension">
+            <h3>${escapeHtml(item.name || 'Критерий')}</h3>
+            <div>
+              <strong>${escapeHtml(repos[0]?.fullName || 'Первый')}</strong>
+              <p>${escapeHtml(item.repoA || item.first || '')}</p>
+            </div>
+            <div>
+              <strong>${escapeHtml(repos[1]?.fullName || 'Второй')}</strong>
+              <p>${escapeHtml(item.repoB || item.second || '')}</p>
+            </div>
+          </article>
+        `)
+        .join('')}
+      <article class="result-card">
+        <h3>Общие сильные стороны</h3>
+        <ul>${(shared.length ? shared : ['Не выделены']).map((item) => `<li>${escapeHtml(String(item))}</li>`).join('')}</ul>
+      </article>
+      <article class="result-card">
+        <h3>Компромиссы</h3>
+        <ul>${(tradeoffs.length ? tradeoffs : ['Не выделены']).map((item) => `<li>${escapeHtml(String(item))}</li>`).join('')}</ul>
+      </article>
+    </div>
+  `;
+
+  compareResults.hidden = false;
+  compareResults.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function loadProfile() {
@@ -1752,6 +1990,61 @@ async function exportAnalysis(format) {
       exportButton.disabled = false;
       exportButton.textContent = previousLabel;
     }
+  }
+}
+
+async function shareCurrentAnalysis() {
+  if (!currentPayload || !shareAnalysisButton) return;
+
+  const originalText = shareAnalysisButton.textContent;
+  shareAnalysisButton.disabled = true;
+  shareAnalysisButton.textContent = 'Готовлю ссылку...';
+
+  try {
+    const response = await fetch('/api/share', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ payload: currentPayload })
+    });
+    const payload = await readApiResponse(response);
+    if (!response.ok || !payload.ok || !payload.url) {
+      throw new Error(payload.error || 'Не удалось создать ссылку');
+    }
+
+    await copyText(payload.url, 'Ссылка на анализ скопирована');
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    shareAnalysisButton.disabled = false;
+    shareAnalysisButton.textContent = originalText || 'Поделиться ссылкой';
+  }
+}
+
+async function loadSharedAnalysis(id) {
+  const shareId = String(id || '').trim();
+  if (!shareId || currentShareId === shareId) return;
+
+  currentShareId = shareId;
+  setLoading(true);
+  hideError();
+  results.hidden = true;
+  setStatus('Открываю общий анализ', 'Загружаю сохранённый отчёт по ссылке.');
+
+  try {
+    const response = await fetch(`/api/share/${encodeURIComponent(shareId)}`, {
+      headers: { Accept: 'application/json' }
+    });
+    const payload = await readApiResponse(response);
+    if (!response.ok || !payload.ok || !payload.analysis) {
+      throw new Error(payload.error || 'Общий анализ не найден');
+    }
+
+    renderResult(payload.analysis);
+    showToast('Анализ открыт по ссылке');
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    setLoading(false);
   }
 }
 

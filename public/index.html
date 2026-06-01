@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>RepoScope - анализ GitHub репозиториев</title>
     <meta name="theme-color" content="#0d1417" />
-    <link rel="icon" href="/favicon.ico?v=31" sizes="any" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=31" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=31" />
-    <link rel="stylesheet" href="/styles.css?v=31" />
+    <link rel="icon" href="/favicon.ico?v=32" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=32" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=32" />
+    <link rel="stylesheet" href="/styles.css?v=32" />
   </head>
   <body>
     <div class="app-shell">
@@ -23,6 +23,7 @@
 
         <nav class="main-nav" aria-label="Основная навигация">
           <a href="/" data-route="/">Анализ</a>
+          <a href="/compare" data-route="/compare">Сравнение</a>
           <a href="/history" data-route="/history">История</a>
           <a href="/favorites" data-route="/favorites">Избранное</a>
         </nav>
@@ -86,6 +87,12 @@
               <div>
                 <strong id="status-title">Готовлю контекст</strong>
                 <p id="status-copy">Забираю метаданные, дерево файлов и важные манифесты с GitHub.</p>
+                <div class="progress-steps" id="progress-steps" aria-label="Этапы анализа">
+                  <span data-progress-step="0">Получаю README</span>
+                  <span data-progress-step="1">Смотрю языки</span>
+                  <span data-progress-step="2">Изучаю зависимости</span>
+                  <span data-progress-step="3">Формирую вывод</span>
+                </div>
               </div>
             </section>
 
@@ -116,10 +123,33 @@
 
               <div class="repo-stats" id="repo-stats"></div>
 
+              <div class="result-overview">
+                <article>
+                  <span>Тип проекта</span>
+                  <strong id="project-type">Определяется</strong>
+                  <p id="project-type-reason"></p>
+                </article>
+                <article>
+                  <span>Основной стек</span>
+                  <strong id="stack-summary">Языки и библиотеки</strong>
+                  <p id="stack-detail"></p>
+                </article>
+                <article>
+                  <span>Следующий шаг</span>
+                  <strong id="next-step-primary">Посмотреть слабые места</strong>
+                  <p id="next-step-detail"></p>
+                </article>
+              </div>
+
               <div class="result-actions" id="result-actions">
+                <div class="result-mode-toggle" aria-label="Режим результата">
+                  <button type="button" class="is-active" data-result-mode="brief">Кратко</button>
+                  <button type="button" data-result-mode="expert">Подробно</button>
+                </div>
                 <button type="button" id="toggle-favorite">В избранное</button>
                 <button type="button" id="copy-weaknesses">Скопировать ошибки</button>
                 <button type="button" id="copy-prompt">Скопировать промпт для LLM</button>
+                <button type="button" id="share-analysis">Поделиться ссылкой</button>
                 <div class="download-actions" aria-label="Скачать анализ">
                   <span>Скачать</span>
                   <button type="button" data-export-format="txt">TXT</button>
@@ -146,14 +176,19 @@
                   <div id="library-list" class="tag-list"></div>
                 </article>
 
-                <article class="result-card">
+                <article class="result-card expert-only">
                   <h3>Архитектура</h3>
                   <ul id="architecture-list"></ul>
                 </article>
 
-                <article class="result-card">
+                <article class="result-card expert-only">
                   <h3>Как запустить</h3>
                   <ol id="run-list"></ol>
+                </article>
+
+                <article class="result-card">
+                  <h3>Следующие шаги</h3>
+                  <ul id="next-steps-list"></ul>
                 </article>
 
                 <article class="result-card weakness-card">
@@ -161,7 +196,7 @@
                   <ul id="weakness-list"></ul>
                 </article>
 
-                <article class="result-card span-2 prompt-card">
+                <article class="result-card span-2 prompt-card expert-only">
                   <div class="card-title-row">
                     <h3>Промпт для LLM-исправления</h3>
                     <button type="button" id="copy-prompt-inline">Скопировать</button>
@@ -172,22 +207,22 @@
                   <textarea id="llm-prompt" readonly spellcheck="false"></textarea>
                 </article>
 
-                <article class="result-card">
+                <article class="result-card expert-only">
                   <h3>Ключевые файлы</h3>
                   <div id="key-files" class="file-list"></div>
                 </article>
 
-                <article class="result-card">
+                <article class="result-card expert-only">
                   <h3>Для кого полезен</h3>
                   <ul id="audience-list"></ul>
                 </article>
 
-                <article class="result-card">
+                <article class="result-card expert-only">
                   <h3>Сигналы качества</h3>
                   <ul id="quality-list"></ul>
                 </article>
 
-                <article class="result-card span-2 conclusion-card">
+                <article class="result-card span-2 conclusion-card expert-only">
                   <h3>Подробный итог</h3>
                   <p id="detailed-conclusion"></p>
                   <div id="questions" class="questions"></div>
@@ -195,6 +230,44 @@
                 </article>
               </div>
             </section>
+          </div>
+        </section>
+
+        <section id="compare-view" class="route-view" hidden>
+          <div class="compare-page">
+            <div class="page-heading">
+              <div>
+                <h1>Сравнение репозиториев</h1>
+                <p>Вставьте два GitHub URL, чтобы понять разницу в назначении, стеке, зрелости и рисках.</p>
+              </div>
+            </div>
+
+            <form id="compare-form" class="compare-form">
+              <label>
+                <span>Первый репозиторий</span>
+                <input id="compare-repo-a" type="url" placeholder="https://github.com/owner/repo" required />
+              </label>
+              <label>
+                <span>Второй репозиторий</span>
+                <input id="compare-repo-b" type="url" placeholder="https://github.com/owner/repo" required />
+              </label>
+              <button type="submit" id="compare-button">Сравнить</button>
+            </form>
+
+            <section class="status-panel compare-status" id="compare-status" hidden aria-live="polite">
+              <div class="loader" aria-hidden="true"></div>
+              <div>
+                <strong>Сравниваю репозитории</strong>
+                <p>Собираю стек, назначение, слабые места и формирую вывод.</p>
+              </div>
+            </section>
+
+            <section class="error-panel" id="compare-error" hidden>
+              <strong>Не удалось выполнить сравнение</strong>
+              <p id="compare-error-copy"></p>
+            </section>
+
+            <section class="compare-results" id="compare-results" hidden></section>
           </div>
         </section>
 
@@ -246,6 +319,6 @@
       <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
     </div>
 
-    <script src="/app.js?v=31"></script>
+    <script src="/app.js?v=32"></script>
   </body>
 </html>

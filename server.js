@@ -43,6 +43,7 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const USER_STATE_FILE = path.join(DATA_DIR, 'user-state.json');
 const SESSION_FILE = path.join(DATA_DIR, 'sessions.json');
+const SHARED_ANALYSES_FILE = path.join(DATA_DIR, 'shared-analyses.json');
 const SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 14;
 const sessions = loadSessionStore();
 
@@ -351,6 +352,105 @@ app.post('/api/analyze', async (req, res) => {
   }
 });
 
+app.post('/api/share', async (req, res) => {
+  try {
+    const session = readSession(req);
+    if (!canUsePrivateAnalyzer(session)) {
+      return res.status(403).json({
+        ok: false,
+        error: 'Создавать публичные ссылки может только GitHub пользователь Zulut30.'
+      });
+    }
+
+    const payload = normalizeSharePayload(req.body?.payload);
+    if (!payload) {
+      return res.status(400).json({ ok: false, error: 'Нет анализа для публикации' });
+    }
+
+    const id = await saveSharedAnalysis(payload);
+    res.json({
+      ok: true,
+      id,
+      url: `${getBaseUrl(req)}/share/${id}`
+    });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message || 'Не удалось создать публичную ссылку'
+    });
+  }
+});
+
+app.get('/api/share/:id', async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    const analysis = await readSharedAnalysis(id);
+    if (!analysis) {
+      return res.status(404).json({ ok: false, error: 'Общий анализ не найден или ссылка устарела' });
+    }
+
+    res.json({ ok: true, id, analysis });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message || 'Не удалось открыть общий анализ'
+    });
+  }
+});
+
+app.post('/api/compare', async (req, res) => {
+  try {
+    const session = readSession(req);
+    if (!canUsePrivateAnalyzer(session)) {
+      return res.status(403).json({
+        ok: false,
+        error: 'Сравнение репозиториев разрешено только GitHub пользователю Zulut30.'
+      });
+    }
+
+    const firstRepo = parseGitHubRepo(String(req.body?.repoA || '').trim());
+    const secondRepo = parseGitHubRepo(String(req.body?.repoB || '').trim());
+    if (!firstRepo || !secondRepo) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Введите две ссылки на GitHub репозитории'
+      });
+    }
+
+    const [firstContext, secondContext] = await Promise.all([
+      loadRepositoryContext(firstRepo.owner, firstRepo.repo, session?.accessToken || ''),
+      loadRepositoryContext(secondRepo.owner, secondRepo.repo, session?.accessToken || '')
+    ]);
+    const prompt = buildComparisonPrompt(firstContext, secondContext);
+    const tokenUsage = {
+      promptTokens: estimateTokens(prompt),
+      completionBudgetTokens: MODEL_MAX_OUTPUT_TOKENS,
+      totalBudgetTokens: estimateTokens(prompt) + MODEL_MAX_OUTPUT_TOKENS
+    };
+    const aiResult = await callTimewebAgent(prompt);
+    const parsedComparison = parseJsonFromModel(aiResult.text);
+
+    res.json({
+      ok: true,
+      provider: aiResult.provider,
+      repos: [firstContext.repo, secondContext.repo],
+      tokenUsage: {
+        provider: aiResult.provider,
+        actual: aiResult.usage || null,
+        estimated: tokenUsage
+      },
+      comparison: parsedComparison.data,
+      rawComparison: aiResult.text
+    });
+  } catch (error) {
+    const status = error.status || 500;
+    res.status(status).json({
+      ok: false,
+      error: error.publicMessage || error.message || 'Не удалось сравнить репозитории'
+    });
+  }
+});
+
 app.post('/api/export', async (req, res) => {
   try {
     const format = String(req.body?.format || '').toLowerCase();
@@ -566,6 +666,61 @@ async function writeProfileState(login, state) {
   return normalized;
 }
 
+async function saveSharedAnalysis(payload) {
+  const store = await readSharedAnalysisStore();
+  const id = crypto.randomBytes(9).toString('base64url');
+  store[id] = {
+    createdAt: new Date().toISOString(),
+    analysis: payload
+  };
+
+  const entries = Object.entries(store)
+    .sort((a, b) => new Date(b[1]?.createdAt || 0) - new Date(a[1]?.createdAt || 0))
+    .slice(0, 200);
+  await writeSharedAnalysisStore(Object.fromEntries(entries));
+  return id;
+}
+
+async function readSharedAnalysis(id) {
+  if (!/^[a-zA-Z0-9_-]{8,32}$/.test(id)) return null;
+  const store = await readSharedAnalysisStore();
+  return store[id]?.analysis || null;
+}
+
+async function readSharedAnalysisStore() {
+  try {
+    const raw = await fs.promises.readFile(SHARED_ANALYSES_FILE, 'utf8');
+    const parsed = JSON.parse(raw.replace(/^\uFEFF/, ''));
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (error) {
+    if (error.code === 'ENOENT') return {};
+    throw error;
+  }
+}
+
+async function writeSharedAnalysisStore(store) {
+  await fs.promises.mkdir(DATA_DIR, { recursive: true });
+  const tempFile = `${SHARED_ANALYSES_FILE}.tmp`;
+  await fs.promises.writeFile(tempFile, `${JSON.stringify(store, null, 2)}\n`, 'utf8');
+  await fs.promises.rename(tempFile, SHARED_ANALYSES_FILE);
+}
+
+function normalizeSharePayload(payload) {
+  if (!payload || typeof payload !== 'object') return null;
+  const repo = payload.repo || {};
+  const analysis = payload.analysis || {};
+  if (!repo.url && !repo.fullName && !analysis.shortSummary) return null;
+
+  return compactSharedPayload({
+    provider: typeof payload.provider === 'string' ? payload.provider : '',
+    repo,
+    languages: Array.isArray(payload.languages) ? payload.languages.slice(0, 12) : [],
+    fileStats: payload.fileStats || {},
+    tokenUsage: payload.tokenUsage || null,
+    analysis
+  });
+}
+
 async function readUserStateStore() {
   try {
     const raw = await fs.promises.readFile(USER_STATE_FILE, 'utf8');
@@ -704,6 +859,7 @@ function analysisToPlainText(payload) {
 function analysisToMarkdown(payload) {
   const { repo, analysis, languages, fileStats } = payload;
   const score = normalizeScoreForExport(analysis.score);
+  const projectType = formatProjectTypeForExport(analysis.projectType);
   const title = cleanText(analysis.title || repo.fullName || 'Анализ репозитория');
   const lines = [];
 
@@ -713,8 +869,10 @@ function analysisToMarkdown(payload) {
 
   lines.push('', '## Оценка');
   lines.push(`${score.value}/10${score.reason ? ` - ${cleanText(score.reason)}` : ''}`);
+  if (projectType) lines.push('', '## Тип проекта', projectType);
 
   addSection(lines, 'Суть репозитория', [analysis.purpose, analysis.essence]);
+  addSection(lines, 'Следующие шаги', normalizeArrayForExport(analysis.nextSteps), true);
   addSection(lines, 'Слабые места', normalizeArrayForExport(analysis.weaknesses), true);
   addSection(lines, 'Языки', formatLanguageLines(analysis.languages, languages), true);
   addSection(lines, 'Библиотеки', formatLibraryLines(analysis.libraries), true);
@@ -779,7 +937,9 @@ function formatKeyFileLines(files) {
 function buildFixPrompt(payload) {
   const { repo, analysis, languages } = payload;
   const score = normalizeScoreForExport(analysis.score);
+  const projectType = formatProjectTypeForExport(analysis.projectType);
   const weaknesses = normalizeArrayForExport(analysis.weaknesses);
+  const nextSteps = normalizeArrayForExport(analysis.nextSteps);
   const qualitySignals = normalizeArrayForExport(analysis.qualitySignals);
   const architecture = normalizeArrayForExport(analysis.architecture);
   const runSteps = normalizeArrayForExport(analysis.howToRun);
@@ -790,8 +950,10 @@ function buildFixPrompt(payload) {
     `Репозиторий: ${repo.fullName || repo.url || 'не указан'}`,
     repo.url ? `URL: ${repo.url}` : '',
     `Краткая суть: ${analysis.shortSummary || analysis.purpose || 'не указана'}`,
+    projectType ? `Тип проекта: ${projectType}` : '',
     `Текущая оценка: ${score.value}/10${score.reason ? ` - ${score.reason}` : ''}`,
     `Основные языки: ${formatLanguageLines(analysis.languages, languages).join('; ') || repo.primaryLanguage || 'не указаны'}`,
+    nextSteps.length ? `AI-рекомендации следующего шага: ${nextSteps.join('; ')}` : '',
     '',
     'Слабые места / ошибки, которые нужно исправить:',
     ...(weaknesses.length ? weaknesses.map((item, index) => `${index + 1}. ${item}`) : ['1. Слабые места не указаны. Сначала проведи аудит README, тестов, CI, зависимостей и структуры.']),
@@ -932,6 +1094,37 @@ function normalizeScoreForExport(score) {
     value: Math.max(0, Math.min(10, Math.round(Number(score?.value || 0)))),
     reason: cleanText(score?.reason || score?.label || '')
   };
+}
+
+function formatProjectTypeForExport(projectType) {
+  if (!projectType) return '';
+  if (typeof projectType === 'string') return cleanText(projectType);
+  if (typeof projectType !== 'object') return '';
+
+  const label = cleanText(projectType.label || projectType.type || '');
+  const reason = cleanText(projectType.reason || projectType.description || '');
+  return [label, reason].filter(Boolean).join(' - ');
+}
+
+function compactSharedPayload(value, depth = 0) {
+  if (depth > 6) return null;
+  if (value === null || value === undefined) return value;
+
+  if (typeof value === 'string') {
+    return value.length > 12000 ? `${value.slice(0, 12000)}\n[truncated]` : value;
+  }
+
+  if (typeof value !== 'object') return value;
+
+  if (Array.isArray(value)) {
+    return value.slice(0, 80).map((item) => compactSharedPayload(item, depth + 1));
+  }
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => key !== 'rawAnalysis' && key !== 'rawComparison')
+      .map(([key, item]) => [key, compactSharedPayload(item, depth + 1)])
+  );
 }
 
 function cleanText(value) {
@@ -1403,6 +1596,7 @@ function buildAnalysisPrompt(context) {
   "shortSummary": "1-2 предложения, зачем нужен репозиторий",
   "purpose": "какую проблему решает и для кого",
   "essence": "главная идея и что происходит внутри",
+  "projectType": {"label": "SaaS/CLI/library/backend API/frontend app/bot/AI-agent/template/infra/tooling/etc", "reason": "почему выбран этот тип"},
   "languages": [{"name": "язык", "percent": 0, "role": "роль в проекте"}],
   "libraries": [{"name": "библиотека или фреймворк", "ecosystem": "npm/pip/go/etc", "purpose": "зачем используется"}],
   "architecture": ["ключевая часть архитектуры или папка"],
@@ -1412,6 +1606,7 @@ function buildAnalysisPrompt(context) {
   "qualitySignals": ["что говорит о зрелости/рисках проекта"],
   "score": {"value": 0, "label": "оценка по 10-балльной шкале", "reason": "почему такая оценка"},
   "weaknesses": ["слабое место, риск или ограничение проекта"],
+  "nextSteps": ["что сделать первым", "что проверить перед деплоем", "какие файлы открыть в первую очередь"],
   "detailedConclusion": "подробный итог в 2-4 абзаца: что это за проект, насколько он зрелый, стоит ли его использовать/изучать и с чего начать знакомство",
   "questions": ["что осталось неясным без глубокого чтения кода"],
   "finalTakeaway": "самая короткая суть репозитория"
@@ -1439,6 +1634,51 @@ ${context.filePaths.join('\n')}
 
 Содержимое важных файлов:
 ${files || '[important files were not available]'}`;
+}
+
+function buildComparisonPrompt(firstContext, secondContext) {
+  const first = compactContextForComparison(firstContext);
+  const second = compactContextForComparison(secondContext);
+
+  return `Сравни два GitHub репозитория на русском языке. Верни строго JSON без markdown-блока и без текста вокруг:
+{
+  "summary": "главный вывод сравнения в 2-3 предложениях",
+  "dimensions": [
+    {"name": "Назначение", "repoA": "чем отличается первый", "repoB": "чем отличается второй"},
+    {"name": "Стек", "repoA": "стек первого", "repoB": "стек второго"},
+    {"name": "Зрелость", "repoA": "сильные/слабые признаки первого", "repoB": "сильные/слабые признаки второго"},
+    {"name": "Риски", "repoA": "риски первого", "repoB": "риски второго"}
+  ],
+  "sharedStrengths": ["что у них общего хорошего"],
+  "tradeoffs": ["какие компромиссы при выборе"],
+  "recommendation": {"choice": "какой выбрать и для какого случая", "reason": "почему"}
+}
+
+Правила:
+- Пиши только по фактам из контекста.
+- Если данных мало, прямо называй ограничение.
+- Не выдумывай зависимости, команды и назначение.
+- Сравнение должно помогать быстро решить, какой репозиторий смотреть первым.
+
+Первый репозиторий:
+${JSON.stringify(first, null, 2)}
+
+Второй репозиторий:
+${JSON.stringify(second, null, 2)}`;
+}
+
+function compactContextForComparison(context) {
+  return {
+    repo: context.repo,
+    languages: context.languages,
+    fileStats: context.fileStats,
+    filePaths: context.filePaths.slice(0, 80),
+    importantFiles: context.fileContents.slice(0, 7).map((file) => ({
+      path: file.path,
+      size: file.size,
+      content: String(file.content || '').slice(0, 1800)
+    }))
+  };
 }
 
 function buildTokenUsageEstimate(context, prompt) {

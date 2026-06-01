@@ -1050,6 +1050,10 @@ button {
 .result-banner,
 .result-card,
 .repo-stats div,
+.result-overview article,
+.compare-page,
+.compare-form,
+.compare-summary article,
 .history-page,
 .history-toolbar,
 .history-card,
@@ -1370,6 +1374,11 @@ button {
   padding: 20px;
 }
 
+.status-panel > div:last-child {
+  min-width: 0;
+  flex: 1;
+}
+
 .status-panel[hidden],
 .error-panel[hidden],
 .results[hidden] {
@@ -1389,6 +1398,56 @@ button {
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
+}
+
+.progress-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.progress-steps span {
+  position: relative;
+  overflow: hidden;
+  min-height: 36px;
+  border: 1px solid color-mix(in srgb, var(--glass-border) 74%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 58%, transparent);
+  color: var(--muted);
+  padding: 9px 11px;
+  font-size: 12px;
+  font-weight: 820;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.progress-steps span::before {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, white 34%, transparent), transparent);
+  content: "";
+  opacity: 0;
+  transform: translateX(-100%);
+}
+
+.progress-steps span.is-active {
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--border));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 15%, transparent), transparent 52%),
+    color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--text);
+}
+
+.progress-steps span.is-active::before {
+  opacity: 1;
+  animation: progress-shine 1.4s ease-in-out infinite;
+}
+
+.progress-steps span.is-done {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: var(--accent-strong);
 }
 
 .error-panel {
@@ -1536,6 +1595,38 @@ button {
   white-space: nowrap;
 }
 
+.result-overview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.result-overview article {
+  padding: 16px;
+}
+
+.result-overview span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 820;
+}
+
+.result-overview strong {
+  display: block;
+  margin-top: 7px;
+  color: var(--text);
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.result-overview p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .result-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1566,6 +1657,36 @@ button {
   font-weight: 800;
 }
 
+.result-mode-toggle {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  min-width: 188px;
+  border: 1px solid color-mix(in srgb, var(--glass-border) 78%, transparent);
+  border-radius: 999px;
+  background: var(--glass-muted);
+  padding: 4px;
+}
+
+.result-mode-toggle button {
+  min-height: 34px;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.result-mode-toggle button.is-active {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--glass-highlight) 18%, transparent), transparent 48%),
+    var(--glass-strong);
+  color: var(--text);
+  box-shadow:
+    0 6px 16px color-mix(in srgb, var(--text) 10%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 26%, transparent);
+}
+
 .result-actions #copy-weaknesses {
   border-color: color-mix(in srgb, var(--coral) 42%, var(--border));
   background: color-mix(in srgb, var(--coral) 12%, var(--surface));
@@ -1573,9 +1694,14 @@ button {
 
 .result-actions #toggle-favorite,
 .result-actions #copy-prompt,
+.result-actions #share-analysis,
 .card-title-row button {
   border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
   background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+
+.results[data-mode='brief'] .expert-only {
+  display: none;
 }
 
 .result-actions #toggle-favorite.is-favorite {
@@ -1793,6 +1919,136 @@ button {
   padding-top: 16px;
   color: var(--text) !important;
   font-weight: 800;
+}
+
+.compare-page {
+  width: min(1120px, calc(100vw - 36px));
+  margin: 32px auto 58px;
+  padding: clamp(22px, 4vw, 36px);
+}
+
+.compare-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  margin-top: 24px;
+  padding: 16px;
+}
+
+.compare-form label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 820;
+}
+
+.compare-form input {
+  width: 100%;
+  min-height: 50px;
+  border: 1px solid color-mix(in srgb, var(--glass-border) 82%, transparent);
+  border-radius: calc(var(--control-radius) - 4px);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--glass-highlight) 12%, transparent), transparent),
+    color-mix(in srgb, var(--surface) 64%, transparent);
+  color: var(--text);
+  padding: 0 14px;
+  outline: none;
+}
+
+.compare-form input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.compare-form button {
+  min-height: 50px;
+  border: 0;
+  border-radius: calc(var(--control-radius) - 4px);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, white 24%, transparent), transparent 44%),
+    linear-gradient(135deg, var(--accent), var(--blue));
+  color: white;
+  padding: 0 18px;
+  font-weight: 850;
+  box-shadow:
+    0 12px 24px color-mix(in srgb, var(--accent) 24%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 34%, transparent);
+}
+
+.compare-status {
+  margin-top: 18px;
+}
+
+.compare-results {
+  display: grid;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.compare-results[hidden] {
+  display: none;
+}
+
+.compare-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.compare-summary article {
+  padding: 16px;
+}
+
+.compare-summary span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 820;
+}
+
+.compare-summary strong {
+  display: block;
+  overflow-wrap: anywhere;
+  margin-top: 7px;
+  color: var(--text);
+  font-size: 17px;
+  line-height: 1.22;
+}
+
+.compare-summary p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.compare-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.compare-dimension {
+  display: grid;
+  gap: 14px;
+}
+
+.compare-dimension div {
+  border: 1px solid color-mix(in srgb, var(--glass-border) 66%, transparent);
+  border-radius: calc(var(--panel-radius) - 7px);
+  background: color-mix(in srgb, var(--surface) 52%, transparent);
+  padding: 12px;
+}
+
+.compare-dimension strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text);
+  font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .history-page,
@@ -2527,10 +2783,14 @@ button {
   .result-banner,
   .result-card,
   .repo-stats div,
+  .result-overview article,
   .history-page,
   .history-toolbar,
   .history-card,
   .favorites-page,
+  .compare-page,
+  .compare-form,
+  .compare-summary article,
   .profile-page,
   .profile-card,
   .profile-hero,
@@ -2550,11 +2810,25 @@ button {
   }
 }
 
+@keyframes progress-shine {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 @media (max-width: 1060px) {
   .workspace,
   .query-panel,
   .result-banner,
-  .result-grid {
+  .result-grid,
+  .result-overview,
+  .compare-form,
+  .compare-summary,
+  .compare-grid {
     grid-template-columns: 1fr;
   }
 
@@ -2638,7 +2912,7 @@ button {
     grid-column: 1 / -1;
     grid-row: 2;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     justify-content: stretch;
     overflow: visible;
     width: 100%;
@@ -2671,11 +2945,17 @@ button {
   .result-banner,
   .result-actions,
   .result-card,
+  .compare-page,
+  .compare-form,
   .history-page,
   .favorites-page,
   .profile-page,
   .profile-card {
     padding: 14px;
+  }
+
+  .progress-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .profile-hero {
@@ -2732,7 +3012,8 @@ button {
   .workspace,
   .history-page,
   .favorites-page,
-  .profile-page {
+  .profile-page,
+  .compare-page {
     width: min(100% - 24px, 1260px);
     margin-top: 18px;
   }
