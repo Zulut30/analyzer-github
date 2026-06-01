@@ -161,7 +161,15 @@ app.get('/auth/github/callback', async (req, res) => {
         login: githubUser.login || '',
         name: githubUser.name || '',
         avatarUrl: githubUser.avatar_url || '',
-        profileUrl: githubUser.html_url || ''
+        profileUrl: githubUser.html_url || '',
+        bio: githubUser.bio || '',
+        company: githubUser.company || '',
+        location: githubUser.location || '',
+        blog: githubUser.blog || '',
+        publicRepos: githubUser.public_repos || 0,
+        followers: githubUser.followers || 0,
+        following: githubUser.following || 0,
+        createdAt: githubUser.created_at || ''
       }
     });
 
@@ -217,6 +225,29 @@ app.get('/api/profile/repos', async (req, res) => {
     res.status(error.status || 502).json({
       ok: false,
       error: error.publicMessage || error.message || 'Не удалось загрузить репозитории GitHub'
+    });
+  }
+});
+
+app.get('/api/profile/activity', async (req, res) => {
+  try {
+    const session = requireAllowedProfileSession(req, res);
+    if (!session) return;
+
+    const activity = await loadProfileActivity(session.accessToken, session.user.login);
+    session.user = {
+      ...session.user,
+      ...activity.user
+    };
+
+    res.json({
+      ok: true,
+      ...activity
+    });
+  } catch (error) {
+    res.status(error.status || 502).json({
+      ok: false,
+      error: error.publicMessage || error.message || 'Не удалось загрузить активность GitHub'
     });
   }
 });
@@ -854,6 +885,159 @@ function normalizeProfileRepository(repo) {
     openIssues: repo.open_issues_count || 0,
     defaultBranch: repo.default_branch || '',
     updatedAt: repo.updated_at || ''
+  };
+}
+
+async function loadProfileActivity(accessToken, login) {
+  const safeLogin = encodeURIComponent(String(login || '').trim());
+  const [user, eventsResult] = await Promise.all([
+    githubJson('https://api.github.com/user', accessToken),
+    safeLogin
+      ? githubJson(`https://api.github.com/users/${safeLogin}/events?per_page=30`, accessToken).catch(() => [])
+      : Promise.resolve([])
+  ]);
+  const events = Array.isArray(eventsResult) ? eventsResult.map(normalizeGitHubEvent).filter(Boolean) : [];
+
+  return {
+    user: normalizeGitHubProfile(user),
+    events,
+    summary: summarizeGitHubEvents(events)
+  };
+}
+
+function normalizeGitHubProfile(user) {
+  return {
+    login: user.login || '',
+    name: user.name || '',
+    avatarUrl: user.avatar_url || '',
+    profileUrl: user.html_url || '',
+    bio: user.bio || '',
+    company: user.company || '',
+    location: user.location || '',
+    blog: user.blog || '',
+    publicRepos: user.public_repos || 0,
+    followers: user.followers || 0,
+    following: user.following || 0,
+    createdAt: user.created_at || ''
+  };
+}
+
+function normalizeGitHubEvent(event) {
+  if (!event || typeof event !== 'object') return null;
+
+  const repoName = event.repo?.name || '';
+  const payload = event.payload || {};
+  const base = {
+    id: String(event.id || crypto.randomUUID()),
+    type: event.type || 'Event',
+    repoName,
+    repoUrl: repoName ? `https://github.com/${repoName}` : '',
+    createdAt: event.created_at || '',
+    action: payload.action || '',
+    title: repoName || 'GitHub',
+    detail: '',
+    url: repoName ? `https://github.com/${repoName}` : ''
+  };
+
+  if (event.type === 'PushEvent') {
+    const commits = Array.isArray(payload.commits) ? payload.commits : [];
+    const branch = String(payload.ref || '').replace('refs/heads/', '');
+    return {
+      ...base,
+      action: 'push',
+      title: `Пуш в ${repoName || 'репозиторий'}`,
+      detail: `${commits.length || payload.size || 0} commit${commits.length === 1 ? '' : 's'}${branch ? ` в ${branch}` : ''}`,
+      branch,
+      commitCount: commits.length || payload.size || 0
+    };
+  }
+
+  if (event.type === 'PullRequestEvent') {
+    const pullRequest = payload.pull_request || {};
+    return {
+      ...base,
+      action: payload.action || 'pull_request',
+      title: `Pull request: ${pullRequest.title || repoName || 'GitHub'}`,
+      detail: payload.action ? `Действие: ${payload.action}` : 'Работа с pull request',
+      url: pullRequest.html_url || base.url
+    };
+  }
+
+  if (event.type === 'IssuesEvent') {
+    const issue = payload.issue || {};
+    return {
+      ...base,
+      action: payload.action || 'issue',
+      title: `Issue: ${issue.title || repoName || 'GitHub'}`,
+      detail: payload.action ? `Действие: ${payload.action}` : 'Работа с issue',
+      url: issue.html_url || base.url
+    };
+  }
+
+  if (event.type === 'IssueCommentEvent') {
+    const issue = payload.issue || {};
+    return {
+      ...base,
+      action: payload.action || 'comment',
+      title: `Комментарий: ${issue.title || repoName || 'GitHub'}`,
+      detail: 'Обсуждение в issue или pull request',
+      url: payload.comment?.html_url || issue.html_url || base.url
+    };
+  }
+
+  if (event.type === 'CreateEvent') {
+    const ref = [payload.ref_type, payload.ref].filter(Boolean).join(' ');
+    return {
+      ...base,
+      action: 'create',
+      title: `Создано в ${repoName || 'GitHub'}`,
+      detail: ref || 'Создан новый объект'
+    };
+  }
+
+  if (event.type === 'ForkEvent') {
+    return {
+      ...base,
+      action: 'fork',
+      title: `Fork ${repoName || 'репозитория'}`,
+      detail: payload.forkee?.full_name ? `Новый fork: ${payload.forkee.full_name}` : 'Создан fork',
+      url: payload.forkee?.html_url || base.url
+    };
+  }
+
+  if (event.type === 'WatchEvent') {
+    return {
+      ...base,
+      action: 'star',
+      title: `Star ${repoName || 'репозитория'}`,
+      detail: 'Репозиторий добавлен в избранные на GitHub'
+    };
+  }
+
+  return {
+    ...base,
+    title: event.type ? event.type.replace(/Event$/, '') : base.title,
+    detail: payload.action ? `Действие: ${payload.action}` : 'Событие GitHub'
+  };
+}
+
+function summarizeGitHubEvents(events) {
+  const byType = {};
+  let commits = 0;
+  const repos = new Set();
+
+  for (const event of events) {
+    const type = event.type || 'Event';
+    byType[type] = (byType[type] || 0) + 1;
+    if (event.repoName) repos.add(event.repoName);
+    commits += Number(event.commitCount || 0);
+  }
+
+  return {
+    total: events.length,
+    commits,
+    repositoriesTouched: repos.size,
+    byType
   };
 }
 

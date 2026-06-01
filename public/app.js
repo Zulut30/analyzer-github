@@ -31,6 +31,7 @@ const themeKey = 'repoScope.theme';
 let currentPayload = null;
 let authState = { authenticated: false, user: null, oauthConfigured: false, canAnalyze: false, allowedLogin: 'zulut30' };
 let profileReposState = { status: 'idle', repositories: [], error: '' };
+let profileActivityState = { status: 'idle', user: null, events: [], summary: null, error: '' };
 let profileRepoQuery = '';
 let profileStateStatus = 'idle';
 let profileStateLoadedFor = '';
@@ -899,6 +900,7 @@ async function loadProfile() {
 
   if (!authState.authenticated) {
     profileReposState = { status: 'idle', repositories: [], error: '' };
+    profileActivityState = { status: 'idle', user: null, events: [], summary: null, error: '' };
     profileStateStatus = 'idle';
     profileStateLoadedFor = '';
   }
@@ -913,7 +915,54 @@ async function loadProfile() {
     if (profileReposState.status === 'idle') {
       loadProfileRepositories();
     }
+    if (profileActivityState.status === 'idle') {
+      loadProfileActivity();
+    }
   }
+}
+
+async function loadProfileActivity() {
+  if (!canUseAnalyzer()) return;
+
+  profileActivityState = { status: 'loading', user: profileActivityState.user, events: [], summary: null, error: '' };
+  renderProfile();
+
+  try {
+    const response = await fetch('/api/profile/activity', { headers: { Accept: 'application/json' } });
+    const payload = await response.json();
+
+    if (!response.ok || !payload.ok) {
+      throw new Error(payload.error || 'Не удалось загрузить активность GitHub');
+    }
+
+    profileActivityState = {
+      status: 'ready',
+      user: payload.user || null,
+      events: Array.isArray(payload.events) ? payload.events : [],
+      summary: payload.summary || null,
+      error: ''
+    };
+
+    if (payload.user) {
+      authState = {
+        ...authState,
+        user: {
+          ...(authState.user || {}),
+          ...payload.user
+        }
+      };
+    }
+  } catch (error) {
+    profileActivityState = {
+      status: 'error',
+      user: profileActivityState.user,
+      events: [],
+      summary: null,
+      error: error.message || 'Не удалось загрузить активность GitHub'
+    };
+  }
+
+  renderProfile();
 }
 
 async function loadProfileRepositories() {
@@ -1051,6 +1100,262 @@ function renderProfileStateNotice() {
   return `<div class="profile-sync">${escapeHtml(text)}</div>`;
 }
 
+function getProfileDisplayUser() {
+  return {
+    ...(authState.user || {}),
+    ...(profileActivityState.user || {})
+  };
+}
+
+function calculateProfileRepoSummary(repositories) {
+  const summary = {
+    total: repositories.length,
+    privateCount: 0,
+    publicCount: 0,
+    forkCount: 0,
+    archivedCount: 0,
+    stars: 0,
+    forks: 0,
+    languages: []
+  };
+  const languages = new Map();
+
+  repositories.forEach((repo) => {
+    if (repo.private) summary.privateCount += 1;
+    else summary.publicCount += 1;
+    if (repo.fork) summary.forkCount += 1;
+    if (repo.archived) summary.archivedCount += 1;
+    summary.stars += Number(repo.stars || 0);
+    summary.forks += Number(repo.forks || 0);
+
+    const language = repo.primaryLanguage || 'Не указан';
+    const current = languages.get(language) || { name: language, count: 0, stars: 0 };
+    current.count += 1;
+    current.stars += Number(repo.stars || 0);
+    languages.set(language, current);
+  });
+
+  summary.languages = [...languages.values()].sort((a, b) => b.count - a.count || b.stars - a.stars).slice(0, 6);
+  return summary;
+}
+
+function renderProfileHero(user) {
+  const profileUrl = user.profileUrl || (user.login ? `https://github.com/${user.login}` : '');
+  const badges = [
+    user.company ? `Компания: ${escapeHtml(user.company)}` : '',
+    user.location ? `Локация: ${escapeHtml(user.location)}` : '',
+    user.blog ? `<a href="${escapeAttr(normalizeProfileLink(user.blog))}" target="_blank" rel="noreferrer">${escapeHtml(cleanProfileLinkLabel(user.blog))}</a>` : '',
+    user.createdAt ? `С GitHub с ${escapeHtml(formatMonthYear(user.createdAt))}` : ''
+  ].filter(Boolean);
+  const activityTotal = profileActivityState.status === 'loading'
+    ? '...'
+    : formatNumber(profileActivityState.summary?.total || profileActivityState.events.length || 0);
+
+  return `
+    <div class="profile-hero">
+      <div class="profile-avatar-wrap">
+        <img src="${escapeAttr(user.avatarUrl || getEmojiImageSrc('github'))}" alt="" />
+      </div>
+      <div class="profile-identity">
+        <span>GitHub профиль</span>
+        <h2>${escapeHtml(user.name || user.login || 'GitHub user')}</h2>
+        ${user.login ? `<a class="profile-login" href="${escapeAttr(profileUrl)}" target="_blank" rel="noreferrer">@${escapeHtml(user.login)}</a>` : ''}
+        <p>${escapeHtml(user.bio || 'Личный профиль RepoScope для анализа репозиториев, истории, избранного и быстрой работы с GitHub.')}</p>
+        ${badges.length ? `<div class="profile-badges">${badges.map((badge) => `<span>${badge}</span>`).join('')}</div>` : ''}
+      </div>
+      <div class="profile-highlight-card">
+        <span>Недавняя активность</span>
+        <strong>${activityTotal}</strong>
+        <small>событий GitHub</small>
+      </div>
+    </div>
+  `;
+}
+
+function renderProfileStats(historyCount, favoritesCount, repoSummary, user) {
+  const repoTotal = profileReposState.status === 'loading' && !repoSummary.total ? '...' : formatNumber(repoSummary.total);
+  const followers = user.followers || user.followers === 0 ? formatNumber(user.followers) : '-';
+
+  return `
+    <div class="profile-stats">
+      <div><span>История</span><strong>${formatNumber(historyCount)}</strong></div>
+      <div><span>Избранное</span><strong>${formatNumber(favoritesCount)}</strong></div>
+      <div><span>Репозитории</span><strong>${repoTotal}</strong></div>
+      <div><span>Приватные</span><strong>${formatNumber(repoSummary.privateCount)}</strong></div>
+      <div><span>Stars</span><strong>${formatNumber(repoSummary.stars)}</strong></div>
+      <div><span>Followers</span><strong>${followers}</strong></div>
+    </div>
+  `;
+}
+
+function renderProfileShowcase(repoSummary) {
+  if (!canUseAnalyzer()) return '';
+
+  const activitySummary = profileActivityState.summary || {};
+  const languageRows = repoSummary.languages.length
+    ? repoSummary.languages.map((language) => {
+        const meta = getLanguageMeta(language.name);
+        const percent = repoSummary.total ? Math.max(8, Math.round((language.count / repoSummary.total) * 100)) : 8;
+        return `
+          <div class="profile-language-row">
+            <span>${escapeHtml(language.name)}</span>
+            <div><i style="--language-color: ${escapeAttr(meta.color)}; width: ${percent}%"></i></div>
+            <strong>${formatNumber(language.count)}</strong>
+          </div>
+        `;
+      }).join('')
+    : `<div class="profile-empty-inline">${profileReposState.status === 'loading' ? 'Загружаю языки репозиториев...' : 'Языки появятся после загрузки репозиториев.'}</div>`;
+
+  return `
+    <section class="profile-showcase">
+      <div class="profile-section-heading">
+        <div>
+          <h3>Портфель разработчика</h3>
+          <p>Сводка считается локально из GitHub-репозиториев и не расходует токены AI.</p>
+        </div>
+      </div>
+      <div class="profile-showcase-grid">
+        <div class="profile-mini-panel">
+          <span>Репозитории</span>
+          <strong>${profileReposState.status === 'loading' && !repoSummary.total ? '...' : formatNumber(repoSummary.total)}</strong>
+          <small>${formatNumber(repoSummary.publicCount)} публичных / ${formatNumber(repoSummary.privateCount)} приватных</small>
+        </div>
+        <div class="profile-mini-panel">
+          <span>Кодовая база</span>
+          <strong>${formatNumber(repoSummary.stars)}</strong>
+          <small>${formatNumber(repoSummary.forks)} forks, ${formatNumber(repoSummary.archivedCount)} архивных</small>
+        </div>
+        <div class="profile-mini-panel">
+          <span>Лента</span>
+          <strong>${profileActivityState.status === 'loading' ? '...' : formatNumber(activitySummary.total || 0)}</strong>
+          <small>${formatNumber(activitySummary.repositoriesTouched || 0)} репозиториев затронуто</small>
+        </div>
+      </div>
+      <div class="profile-language-list">${languageRows}</div>
+    </section>
+  `;
+}
+
+function renderProfileActivity() {
+  if (!canUseAnalyzer()) return '';
+
+  if (profileActivityState.status === 'loading') {
+    return `
+      <section class="profile-activity">
+        <div class="profile-section-heading">
+          <div>
+            <h3>Активность GitHub</h3>
+            <p>Загружаю свежие события профиля.</p>
+          </div>
+        </div>
+        <div class="profile-repo-empty">Загрузка активности...</div>
+      </section>
+    `;
+  }
+
+  if (profileActivityState.status === 'error') {
+    return `
+      <section class="profile-activity">
+        <div class="profile-section-heading">
+          <div>
+            <h3>Активность GitHub</h3>
+            <p>GitHub Events API сейчас не отдал ленту.</p>
+          </div>
+          <button type="button" class="secondary-button" id="refresh-profile-activity">Повторить</button>
+        </div>
+        <div class="profile-repo-empty">${escapeHtml(profileActivityState.error)}</div>
+      </section>
+    `;
+  }
+
+  const events = profileActivityState.events.slice(0, 12);
+  const content = events.length
+    ? `<div class="activity-list">${events.map(renderActivityItem).join('')}</div>`
+    : '<div class="profile-repo-empty">GitHub не вернул недавнюю публичную активность за последние дни.</div>';
+
+  return `
+    <section class="profile-activity">
+      <div class="profile-section-heading">
+        <div>
+          <h3>Активность GitHub</h3>
+          <p>Недавние события из GitHub Events API. Лента может обновляться с задержкой.</p>
+        </div>
+        <button type="button" class="secondary-button" id="refresh-profile-activity">Обновить</button>
+      </div>
+      ${content}
+    </section>
+  `;
+}
+
+function renderActivityItem(event) {
+  return `
+    <article class="activity-item">
+      <span class="activity-icon">${escapeHtml(eventTypeLabel(event.type))}</span>
+      <div class="activity-content">
+        <div class="activity-title">
+          <a href="${escapeAttr(event.url || event.repoUrl || '#')}" target="_blank" rel="noreferrer">${escapeHtml(event.title || event.repoName || 'GitHub event')}</a>
+          <time datetime="${escapeAttr(event.createdAt || '')}">${escapeHtml(formatRelativeTime(event.createdAt))}</time>
+        </div>
+        <p>${escapeHtml(event.detail || 'Событие GitHub')}</p>
+        ${event.repoName ? `<a class="activity-repo" href="${escapeAttr(event.repoUrl)}" target="_blank" rel="noreferrer">${escapeHtml(event.repoName)}</a>` : ''}
+      </div>
+    </article>
+  `;
+}
+
+function eventTypeLabel(type) {
+  const labels = {
+    PushEvent: 'Push',
+    PullRequestEvent: 'PR',
+    IssuesEvent: 'Issue',
+    IssueCommentEvent: 'Comment',
+    CreateEvent: 'Create',
+    ForkEvent: 'Fork',
+    WatchEvent: 'Star'
+  };
+  return labels[type] || String(type || 'Event').replace(/Event$/, '') || 'Event';
+}
+
+function formatRelativeTime(value) {
+  if (!value) return 'дата не указана';
+  const date = new Date(value);
+  const diffMs = date.getTime() - Date.now();
+  const absMs = Math.abs(diffMs);
+  const divisions = [
+    { amount: 60 * 1000, unit: 'second' },
+    { amount: 60 * 60 * 1000, unit: 'minute' },
+    { amount: 24 * 60 * 60 * 1000, unit: 'hour' },
+    { amount: 7 * 24 * 60 * 60 * 1000, unit: 'day' },
+    { amount: 30 * 24 * 60 * 60 * 1000, unit: 'week' }
+  ];
+  const formatter = new Intl.RelativeTimeFormat('ru-RU', { numeric: 'auto' });
+
+  if (absMs < divisions[0].amount) return formatter.format(Math.round(diffMs / 1000), 'second');
+  if (absMs < divisions[1].amount) return formatter.format(Math.round(diffMs / divisions[0].amount), 'minute');
+  if (absMs < divisions[2].amount) return formatter.format(Math.round(diffMs / divisions[1].amount), 'hour');
+  if (absMs < divisions[3].amount) return formatter.format(Math.round(diffMs / divisions[2].amount), 'day');
+  if (absMs < divisions[4].amount) return formatter.format(Math.round(diffMs / divisions[3].amount), 'week');
+  return formatDate(value);
+}
+
+function formatMonthYear(value) {
+  if (!value) return '';
+  return new Intl.DateTimeFormat('ru-RU', {
+    month: 'long',
+    year: 'numeric'
+  }).format(new Date(value));
+}
+
+function normalizeProfileLink(value) {
+  const text = String(value || '').trim();
+  if (!text) return '#';
+  return /^https?:\/\//i.test(text) ? text : `https://${text}`;
+}
+
+function cleanProfileLinkLabel(value) {
+  return String(value || '').replace(/^https?:\/\//i, '').replace(/\/$/, '');
+}
+
 function renderProfile() {
   if (!profileCard) return;
 
@@ -1060,23 +1365,14 @@ function renderProfile() {
   const statusText = profileStatusText(authStatus);
 
   if (authState.authenticated && authState.user) {
-    const user = authState.user;
+    const user = getProfileDisplayUser();
+    const repoSummary = calculateProfileRepoSummary(profileReposState.repositories);
     profileCard.innerHTML = `
       ${statusText ? `<div class="profile-notice">${escapeHtml(statusText)}</div>` : ''}
-      <div class="profile-user">
-        <img src="${escapeAttr(user.avatarUrl || getEmojiImageSrc('github'))}" alt="" />
-        <div>
-          <span>GitHub профиль</span>
-          <h2>${escapeHtml(user.name || user.login || 'GitHub user')}</h2>
-          ${user.login ? `<a href="${escapeAttr(user.profileUrl || `https://github.com/${user.login}`)}" target="_blank" rel="noreferrer">@${escapeHtml(user.login)}</a>` : ''}
-        </div>
-      </div>
-      <div class="profile-stats">
-        <div><span>История</span><strong>${historyCount}</strong></div>
-        <div><span>Избранное</span><strong>${favoritesCount}</strong></div>
-      </div>
+      ${renderProfileHero(user)}
+      ${renderProfileStats(historyCount, favoritesCount, repoSummary, user)}
       ${renderProfileStateNotice()}
-      ${canUseAnalyzer() ? renderProfileRepositories() : renderProfileAccessBlocked()}
+      ${canUseAnalyzer() ? `${renderProfileShowcase(repoSummary)}${renderProfileActivity()}${renderProfileRepositories()}` : renderProfileAccessBlocked()}
       <form class="profile-actions" method="post" action="/auth/logout">
         <button type="submit">Выйти</button>
       </form>
@@ -1245,6 +1541,14 @@ function attachProfileRepoEvents() {
     refresh.addEventListener('click', () => {
       profileReposState = { status: 'idle', repositories: [], error: '' };
       loadProfileRepositories();
+    });
+  }
+
+  const refreshActivity = document.querySelector('#refresh-profile-activity');
+  if (refreshActivity) {
+    refreshActivity.addEventListener('click', () => {
+      profileActivityState = { status: 'idle', user: profileActivityState.user, events: [], summary: null, error: '' };
+      loadProfileActivity();
     });
   }
 
