@@ -1,0 +1,20 @@
+{
+  "name": "github-repo-analyzer",
+  "version": "1.0.0",
+  "description": "A simple GitHub repository analyzer powered by a Timeweb AI agent.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "compression": "^1.8.1",
+    "docx": "^9.7.1",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "pdfkit": "^0.18.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

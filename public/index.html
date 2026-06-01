@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RepoScope - анализ GitHub репозиториев</title>
+    <meta name="theme-color" content="#0d1417" />
+    <link rel="icon" href="/favicon.ico?v=19" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=19" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=19" />
+    <link rel="stylesheet" href="/styles.css?v=19" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="app-header">
+        <a class="brand" href="/" data-route="/">
+          <span>
+            <strong>RepoScope</strong>
+            <small>GitHub analyzer</small>
+          </span>
+        </a>
+
+        <nav class="main-nav" aria-label="Основная навигация">
+          <a href="/" data-route="/">Анализ</a>
+          <a href="/history" data-route="/history">История</a>
+          <a href="/favorites" data-route="/favorites">Избранное</a>
+          <a href="/profile" data-route="/profile">Профиль</a>
+        </nav>
+
+        <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Переключить тему">
+          <span class="sun-icon" aria-hidden="true"></span>
+          <span id="theme-label">Светлая</span>
+        </button>
+      </header>
+
+      <main>
+        <section id="analysis-view" class="route-view">
+          <div class="workspace">
+            <section class="search-panel" aria-label="Анализ GitHub репозитория">
+              <form id="analyze-form" class="repo-form">
+                <label class="sr-only" for="repo-url">GitHub репозиторий</label>
+                <div class="input-row">
+                  <input
+                    id="repo-url"
+                    name="repoUrl"
+                    type="text"
+                    inputmode="url"
+                    placeholder="https://github.com/owner/repo"
+                    autocomplete="url"
+                    required
+                  />
+                  <button type="submit" id="analyze-button">
+                    <span class="button-icon" aria-hidden="true"></span>
+                    Анализировать
+                  </button>
+                </div>
+              </form>
+              <p id="access-note" class="access-note" aria-live="polite"></p>
+            </section>
+
+            <section class="status-panel" id="status-panel" hidden aria-live="polite">
+              <div class="loader" aria-hidden="true"></div>
+              <div>
+                <strong id="status-title">Готовлю контекст</strong>
+                <p id="status-copy">Забираю метаданные, дерево файлов и важные манифесты с GitHub.</p>
+              </div>
+            </section>
+
+            <section class="error-panel" id="error-panel" hidden>
+              <strong>Не удалось выполнить анализ</strong>
+              <p id="error-copy"></p>
+            </section>
+
+            <section class="results" id="results" hidden>
+              <div class="result-banner">
+                <div class="repo-art" id="repo-art">
+                  <img id="repo-art-image" class="repo-art-image" alt="" />
+                </div>
+
+                <div class="repo-intro">
+                  <p class="repo-link" id="repo-link"></p>
+                  <h2 id="analysis-title">Анализ репозитория</h2>
+                  <p id="short-summary"></p>
+                  <div id="topic-list" class="topic-list"></div>
+                </div>
+
+                <div class="score-card">
+                  <span>Оценка</span>
+                  <strong id="score-value">0/10</strong>
+                  <p id="score-reason">Оценка появится после анализа.</p>
+                </div>
+              </div>
+
+              <div class="repo-stats" id="repo-stats"></div>
+
+              <div class="result-actions" id="result-actions">
+                <button type="button" id="toggle-favorite">В избранное</button>
+                <button type="button" id="copy-weaknesses">Скопировать ошибки</button>
+                <button type="button" id="copy-prompt">Скопировать промпт для LLM</button>
+                <div class="download-actions" aria-label="Скачать анализ">
+                  <span>Скачать</span>
+                  <button type="button" data-export-format="txt">TXT</button>
+                  <button type="button" data-export-format="md">MD</button>
+                  <button type="button" data-export-format="pdf">PDF</button>
+                  <button type="button" data-export-format="docx">DOCX</button>
+                </div>
+              </div>
+
+              <div class="result-grid">
+                <article class="result-card span-2">
+                  <h3>Суть репозитория</h3>
+                  <p id="purpose"></p>
+                  <p id="essence"></p>
+                </article>
+
+                <article class="result-card span-2">
+                  <h3>Языки и визуальная карта</h3>
+                  <div id="language-list" class="language-list"></div>
+                </article>
+
+                <article class="result-card">
+                  <h3>Библиотеки</h3>
+                  <div id="library-list" class="tag-list"></div>
+                </article>
+
+                <article class="result-card">
+                  <h3>Архитектура</h3>
+                  <ul id="architecture-list"></ul>
+                </article>
+
+                <article class="result-card">
+                  <h3>Как запустить</h3>
+                  <ol id="run-list"></ol>
+                </article>
+
+                <article class="result-card weakness-card">
+                  <h3>Слабые места</h3>
+                  <ul id="weakness-list"></ul>
+                </article>
+
+                <article class="result-card span-2 prompt-card">
+                  <div class="card-title-row">
+                    <h3>Промпт для LLM-исправления</h3>
+                    <button type="button" id="copy-prompt-inline">Скопировать</button>
+                  </div>
+                  <p>
+                    Этот промпт можно отправить другой LLM или coding agent, чтобы она исправила найденные слабые места без лишних догадок.
+                  </p>
+                  <textarea id="llm-prompt" readonly spellcheck="false"></textarea>
+                </article>
+
+                <article class="result-card">
+                  <h3>Ключевые файлы</h3>
+                  <div id="key-files" class="file-list"></div>
+                </article>
+
+                <article class="result-card">
+                  <h3>Для кого полезен</h3>
+                  <ul id="audience-list"></ul>
+                </article>
+
+                <article class="result-card">
+                  <h3>Сигналы качества</h3>
+                  <ul id="quality-list"></ul>
+                </article>
+
+                <article class="result-card span-2 conclusion-card">
+                  <h3>Подробный итог</h3>
+                  <p id="detailed-conclusion"></p>
+                  <div id="questions" class="questions"></div>
+                  <p class="final-takeaway" id="final-takeaway"></p>
+                </article>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section id="history-view" class="route-view" hidden>
+          <div class="history-page">
+            <div class="page-heading">
+              <div>
+                <h1>История репозиториев</h1>
+                <p>Здесь сохраняются репозитории, которые вы уже анализировали в этом браузере.</p>
+              </div>
+              <button class="secondary-button" id="clear-history" type="button">Очистить историю</button>
+            </div>
+
+            <div class="history-toolbar">
+              <label for="history-search">Поиск по истории</label>
+              <input id="history-search" type="search" placeholder="owner/repo, язык или краткое описание" />
+            </div>
+
+            <div id="history-page-list" class="history-page-list"></div>
+          </div>
+        </section>
+
+        <section id="favorites-view" class="route-view" hidden>
+          <div class="favorites-page">
+            <div class="page-heading">
+              <div>
+                <h1>Избранное</h1>
+                <p>Закрепляйте полезные разборы, чтобы быстро возвращаться к ним без повторного анализа.</p>
+              </div>
+            </div>
+
+            <div id="favorites-list" class="favorites-list"></div>
+          </div>
+        </section>
+
+        <section id="profile-view" class="route-view" hidden>
+          <div class="profile-page">
+            <div class="page-heading">
+              <div>
+                <h1>Профиль</h1>
+                <p>Вход через GitHub подготовлен для личного рабочего пространства RepoScope.</p>
+              </div>
+            </div>
+
+            <div id="profile-card" class="profile-card"></div>
+          </div>
+        </section>
+      </main>
+      <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    </div>
+
+    <script src="/app.js?v=19"></script>
+  </body>
+</html>
