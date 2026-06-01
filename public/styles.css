@@ -125,6 +125,22 @@
   --mesh-c: color-mix(in srgb, var(--amber) 12%, transparent);
 }
 
+:root[data-theme='dark'],
+:root[data-theme='graphite'],
+:root[data-theme='aurora'] {
+  --dark-chrome-fill: color-mix(in srgb, var(--surface) 82%, var(--bg) 18%);
+  --dark-chrome-fill-strong: color-mix(in srgb, var(--surface-muted) 86%, var(--bg) 14%);
+  --dark-chrome-fill-soft: color-mix(in srgb, var(--surface) 70%, transparent);
+  --dark-chrome-border: color-mix(in srgb, var(--accent) 22%, var(--border));
+  --dark-chrome-highlight: color-mix(in srgb, var(--accent) 12%, transparent);
+  --dark-chrome-shadow: 0 22px 54px rgba(0, 0, 0, 0.24);
+}
+
+:root[data-theme='graphite'] {
+  --dark-chrome-border: color-mix(in srgb, var(--accent) 18%, var(--border));
+  --dark-chrome-highlight: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
 :root[data-theme='frost'] {
   color-scheme: light;
   --bg: #f8fbff;
@@ -636,6 +652,139 @@ button {
 .profile-popover {
   width: min(310px, calc(100vw - 28px));
   padding: 18px;
+}
+
+:root[data-theme='dark'] .app-header,
+:root[data-theme='graphite'] .app-header,
+:root[data-theme='aurora'] .app-header {
+  border-color: color-mix(in srgb, var(--dark-chrome-border) 86%, transparent);
+  background:
+    linear-gradient(135deg, var(--dark-chrome-highlight), transparent 54%),
+    var(--dark-chrome-fill);
+  box-shadow:
+    var(--dark-chrome-shadow),
+    inset 0 1px 0 color-mix(in srgb, var(--accent) 10%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, black 24%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.06);
+  backdrop-filter: blur(14px) saturate(1.06);
+}
+
+:root[data-theme='dark'] .app-header::before,
+:root[data-theme='graphite'] .app-header::before,
+:root[data-theme='aurora'] .app-header::before {
+  background:
+    linear-gradient(100deg, color-mix(in srgb, var(--accent) 8%, transparent), transparent 26% 74%, color-mix(in srgb, var(--blue) 6%, transparent)),
+    radial-gradient(circle at 16% 0%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 38%),
+    radial-gradient(circle at 92% 12%, color-mix(in srgb, var(--blue) 6%, transparent), transparent 36%);
+  opacity: 0.52;
+}
+
+:root[data-theme='dark'] .app-header::after,
+:root[data-theme='graphite'] .app-header::after,
+:root[data-theme='aurora'] .app-header::after {
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 24%, transparent), transparent);
+  opacity: 0.28;
+}
+
+:root[data-theme='dark'] .main-nav,
+:root[data-theme='graphite'] .main-nav,
+:root[data-theme='aurora'] .main-nav,
+:root[data-theme='dark'] .theme-toggle,
+:root[data-theme='graphite'] .theme-toggle,
+:root[data-theme='aurora'] .theme-toggle,
+:root[data-theme='dark'] .profile-menu-button,
+:root[data-theme='graphite'] .profile-menu-button,
+:root[data-theme='aurora'] .profile-menu-button {
+  border-color: color-mix(in srgb, var(--dark-chrome-border) 88%, transparent);
+  background:
+    linear-gradient(180deg, var(--dark-chrome-highlight), transparent 58%),
+    var(--dark-chrome-fill-strong);
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 color-mix(in srgb, var(--accent) 10%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, black 26%, transparent);
+  -webkit-backdrop-filter: blur(13px) saturate(1.05);
+  backdrop-filter: blur(13px) saturate(1.05);
+}
+
+:root[data-theme='dark'] .main-nav::before,
+:root[data-theme='graphite'] .main-nav::before,
+:root[data-theme='aurora'] .main-nav::before,
+:root[data-theme='dark'] .theme-toggle::before,
+:root[data-theme='graphite'] .theme-toggle::before,
+:root[data-theme='aurora'] .theme-toggle::before,
+:root[data-theme='dark'] .profile-menu-button::before,
+:root[data-theme='graphite'] .profile-menu-button::before,
+:root[data-theme='aurora'] .profile-menu-button::before {
+  background:
+    linear-gradient(125deg, color-mix(in srgb, var(--accent) 8%, transparent), transparent 48%),
+    radial-gradient(circle at 18% 0%, color-mix(in srgb, var(--blue) 5%, transparent), transparent 42%);
+  opacity: 0.5;
+}
+
+:root[data-theme='dark'] .main-nav::after,
+:root[data-theme='graphite'] .main-nav::after,
+:root[data-theme='aurora'] .main-nav::after {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  opacity: 0.2;
+}
+
+:root[data-theme='dark'] .main-nav a:hover,
+:root[data-theme='graphite'] .main-nav a:hover,
+:root[data-theme='aurora'] .main-nav a:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+:root[data-theme='dark'] .main-nav a.is-active,
+:root[data-theme='graphite'] .main-nav a.is-active,
+:root[data-theme='aurora'] .main-nav a.is-active {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 14%, transparent), transparent 56%),
+    color-mix(in srgb, var(--surface-muted) 86%, var(--bg) 14%);
+  box-shadow:
+    0 8px 18px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 color-mix(in srgb, var(--accent) 16%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, black 28%, transparent);
+}
+
+:root[data-theme='dark'] .theme-popover,
+:root[data-theme='graphite'] .theme-popover,
+:root[data-theme='aurora'] .theme-popover,
+:root[data-theme='dark'] .profile-popover,
+:root[data-theme='graphite'] .profile-popover,
+:root[data-theme='aurora'] .profile-popover {
+  border-color: color-mix(in srgb, var(--dark-chrome-border) 88%, transparent);
+  background:
+    linear-gradient(135deg, var(--dark-chrome-highlight), transparent 56%),
+    var(--dark-chrome-fill-strong);
+  box-shadow:
+    0 26px 70px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 color-mix(in srgb, var(--accent) 12%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.08);
+  backdrop-filter: blur(16px) saturate(1.08);
+}
+
+:root[data-theme='dark'] .theme-popover::before,
+:root[data-theme='graphite'] .theme-popover::before,
+:root[data-theme='aurora'] .theme-popover::before,
+:root[data-theme='dark'] .profile-popover::before,
+:root[data-theme='graphite'] .profile-popover::before,
+:root[data-theme='aurora'] .profile-popover::before {
+  background:
+    linear-gradient(130deg, color-mix(in srgb, var(--accent) 8%, transparent), transparent 46%),
+    radial-gradient(circle at 16% 0%, color-mix(in srgb, var(--blue) 7%, transparent), transparent 42%);
+  opacity: 0.55;
+}
+
+:root[data-theme='dark'] .theme-popover::after,
+:root[data-theme='graphite'] .theme-popover::after,
+:root[data-theme='aurora'] .theme-popover::after,
+:root[data-theme='dark'] .profile-popover::after,
+:root[data-theme='graphite'] .profile-popover::after,
+:root[data-theme='aurora'] .profile-popover::after {
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 22%, transparent), transparent);
+  opacity: 0.28;
 }
 
 .popover-heading {
@@ -2902,6 +3051,70 @@ button {
 .search-panel .input-row button > * {
   position: relative;
   z-index: 1;
+}
+
+:root[data-theme='dark'] .search-panel .input-row,
+:root[data-theme='graphite'] .search-panel .input-row,
+:root[data-theme='aurora'] .search-panel .input-row {
+  border-color: color-mix(in srgb, var(--dark-chrome-border) 92%, transparent);
+  background:
+    radial-gradient(circle at 18% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 42%),
+    radial-gradient(circle at 84% 112%, color-mix(in srgb, var(--blue) 7%, transparent), transparent 46%),
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 7%, transparent), transparent 46%),
+    color-mix(in srgb, var(--surface-muted) 84%, var(--bg) 16%);
+  box-shadow:
+    0 28px 76px rgba(0, 0, 0, 0.3),
+    0 10px 26px color-mix(in srgb, var(--accent) 7%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--accent) 12%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, black 30%, transparent);
+  -webkit-backdrop-filter: blur(15px) saturate(1.06);
+  backdrop-filter: blur(15px) saturate(1.06);
+}
+
+:root[data-theme='dark'] .search-panel .input-row::before,
+:root[data-theme='graphite'] .search-panel .input-row::before,
+:root[data-theme='aurora'] .search-panel .input-row::before {
+  background:
+    linear-gradient(105deg, color-mix(in srgb, var(--accent) 9%, transparent), transparent 28% 74%, color-mix(in srgb, var(--blue) 6%, transparent)),
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 7%, transparent), transparent 50%);
+  opacity: 0.5;
+}
+
+:root[data-theme='dark'] .search-panel .input-row::after,
+:root[data-theme='graphite'] .search-panel .input-row::after,
+:root[data-theme='aurora'] .search-panel .input-row::after {
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 26%, transparent), transparent);
+  opacity: 0.3;
+}
+
+:root[data-theme='dark'] .search-panel .input-row:focus-within,
+:root[data-theme='graphite'] .search-panel .input-row:focus-within,
+:root[data-theme='aurora'] .search-panel .input-row:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 62%, var(--border));
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent),
+    0 30px 82px color-mix(in srgb, var(--accent) 16%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--accent) 16%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, black 30%, transparent);
+}
+
+:root[data-theme='dark'] .search-panel .input-row button,
+:root[data-theme='graphite'] .search-panel .input-row button,
+:root[data-theme='aurora'] .search-panel .input-row button {
+  border-color: color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow:
+    0 14px 30px color-mix(in srgb, var(--accent) 24%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--accent) 16%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, black 24%, transparent);
+}
+
+:root[data-theme='dark'] .search-panel .input-row button::after,
+:root[data-theme='graphite'] .search-panel .input-row button::after,
+:root[data-theme='aurora'] .search-panel .input-row button::after {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent 42%),
+    radial-gradient(circle at 80% 15%, color-mix(in srgb, var(--blue) 14%, transparent), transparent 30%);
+  opacity: 0.66;
 }
 
 .access-note {
