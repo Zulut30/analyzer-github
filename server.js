@@ -630,7 +630,21 @@ function clearCookie(res, name, options = {}) {
 }
 
 function isSecureRequest(req) {
-  return req.secure || String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
+  const explicit = process.env.APP_BASE_URL || process.env.PUBLIC_BASE_URL;
+  if (explicit && /^https:\/\//i.test(explicit)) return true;
+
+  const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
+  const forwardedSsl = String(req.headers['x-forwarded-ssl'] || '').toLowerCase();
+  const urlScheme = String(req.headers['x-url-scheme'] || '').toLowerCase();
+  const cfVisitor = String(req.headers['cf-visitor'] || '');
+
+  return (
+    req.secure ||
+    forwardedProto === 'https' ||
+    forwardedSsl === 'on' ||
+    urlScheme === 'https' ||
+    cfVisitor.includes('"scheme":"https"')
+  );
 }
 
 function getBaseUrl(req) {
