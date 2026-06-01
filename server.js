@@ -42,7 +42,9 @@ const AI_MAX_FILE_CHARS = Number(process.env.AI_MAX_FILE_CHARS || 7000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const USER_STATE_FILE = path.join(DATA_DIR, 'user-state.json');
-const sessions = new Map();
+const SESSION_FILE = path.join(DATA_DIR, 'sessions.json');
+const SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 14;
+const sessions = loadSessionStore();
 
 app.use(compression({ threshold: 1024 }));
 app.use(express.json({ limit: '5mb' }));
@@ -173,6 +175,7 @@ app.get('/auth/github/callback', async (req, res) => {
       }
     });
 
+    await writeSessionStore();
     setSessionCookie(res, req, sid);
     clearCookie(res, 'repo_scope_oauth_state', { secure: isSecureRequest(req) });
     pruneSessions();
@@ -182,16 +185,18 @@ app.get('/auth/github/callback', async (req, res) => {
   }
 });
 
-app.post('/auth/logout', (req, res) => {
+app.post('/auth/logout', async (req, res) => {
   const sid = verifySignedValue(parseCookies(req).repo_scope_session || '');
   if (sid) sessions.delete(sid);
+  await writeSessionStore().catch(() => {});
   clearSessionCookie(res, req);
   res.redirect('/profile?auth=logout');
 });
 
-app.get('/auth/logout', (req, res) => {
+app.get('/auth/logout', async (req, res) => {
   const sid = verifySignedValue(parseCookies(req).repo_scope_session || '');
   if (sid) sessions.delete(sid);
+  await writeSessionStore().catch(() => {});
   clearSessionCookie(res, req);
   res.redirect('/profile?auth=logout');
 });
@@ -239,6 +244,7 @@ app.get('/api/profile/activity', async (req, res) => {
       ...session.user,
       ...activity.user
     };
+    await writeSessionStore();
 
     res.json({
       ok: true,
@@ -390,11 +396,83 @@ function parseCookies(req) {
     .reduce((cookies, part) => {
       const index = part.indexOf('=');
       if (index === -1) return cookies;
-      const key = decodeURIComponent(part.slice(0, index));
-      const value = decodeURIComponent(part.slice(index + 1));
+      const key = safeDecodeURIComponent(part.slice(0, index));
+      const value = safeDecodeURIComponent(part.slice(index + 1));
       cookies[key] = value;
       return cookies;
     }, {});
+}
+
+function safeDecodeURIComponent(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return String(value || '');
+  }
+}
+
+function loadSessionStore() {
+  try {
+    const raw = fs.readFileSync(SESSION_FILE, 'utf8');
+    const parsed = JSON.parse(raw.replace(/^\uFEFF/, ''));
+    const entries = parsed && typeof parsed === 'object' ? Object.entries(parsed.sessions || parsed) : [];
+    const now = Date.now();
+    const store = new Map();
+
+    for (const [sid, session] of entries) {
+      const normalized = normalizeStoredSession(session);
+      if (!sid || !normalized) continue;
+      if (now - normalized.createdAt > SESSION_MAX_AGE_MS) continue;
+      store.set(sid, normalized);
+    }
+
+    return store;
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn('Could not load persisted sessions:', error.message);
+    }
+    return new Map();
+  }
+}
+
+function normalizeStoredSession(session) {
+  if (!session || typeof session !== 'object') return null;
+  const createdAt = Number(session.createdAt || 0);
+  const login = String(session.user?.login || '').trim();
+  const accessToken = String(session.accessToken || '');
+
+  if (!Number.isFinite(createdAt) || createdAt <= 0 || !login || !accessToken) return null;
+
+  return {
+    createdAt,
+    accessToken,
+    tokenScope: String(session.tokenScope || ''),
+    user: {
+      login,
+      name: String(session.user?.name || ''),
+      avatarUrl: String(session.user?.avatarUrl || ''),
+      profileUrl: String(session.user?.profileUrl || ''),
+      bio: String(session.user?.bio || ''),
+      company: String(session.user?.company || ''),
+      location: String(session.user?.location || ''),
+      blog: String(session.user?.blog || ''),
+      publicRepos: Number(session.user?.publicRepos || 0),
+      followers: Number(session.user?.followers || 0),
+      following: Number(session.user?.following || 0),
+      createdAt: String(session.user?.createdAt || '')
+    }
+  };
+}
+
+async function writeSessionStore() {
+  await fs.promises.mkdir(DATA_DIR, { recursive: true });
+  const payload = {
+    updatedAt: new Date().toISOString(),
+    sessions: Object.fromEntries(sessions)
+  };
+  const tempFile = `${SESSION_FILE}.tmp`;
+  await fs.promises.writeFile(tempFile, `${JSON.stringify(payload, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+  await fs.promises.rename(tempFile, SESSION_FILE);
 }
 
 function signValue(value) {
@@ -425,9 +503,9 @@ function readSession(req) {
   const session = sessions.get(sid);
   if (!session) return null;
 
-  const maxAgeMs = 1000 * 60 * 60 * 24 * 14;
-  if (Date.now() - session.createdAt > maxAgeMs) {
+  if (Date.now() - session.createdAt > SESSION_MAX_AGE_MS) {
     sessions.delete(sid);
+    writeSessionStore().catch(() => {});
     return null;
   }
 
@@ -565,11 +643,15 @@ function getBaseUrl(req) {
 }
 
 function pruneSessions() {
-  const maxAgeMs = 1000 * 60 * 60 * 24 * 14;
   const now = Date.now();
+  let changed = false;
   for (const [sid, session] of sessions.entries()) {
-    if (now - session.createdAt > maxAgeMs) sessions.delete(sid);
+    if (now - session.createdAt > SESSION_MAX_AGE_MS) {
+      sessions.delete(sid);
+      changed = true;
+    }
   }
+  if (changed) writeSessionStore().catch(() => {});
 }
 
 function sendBuffer(res, buffer, fileName, contentType) {
