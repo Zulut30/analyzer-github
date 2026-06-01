@@ -40,6 +40,8 @@ const AI_MAX_SELECTED_FILES = Number(process.env.AI_MAX_SELECTED_FILES || 12);
 const AI_MAX_LISTED_FILES = Number(process.env.AI_MAX_LISTED_FILES || 160);
 const AI_MAX_FILE_CHARS = Number(process.env.AI_MAX_FILE_CHARS || 7000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+const USER_STATE_FILE = path.join(DATA_DIR, 'user-state.json');
 const sessions = new Map();
 
 app.use(compression({ threshold: 1024 }));
@@ -219,6 +221,37 @@ app.get('/api/profile/repos', async (req, res) => {
   }
 });
 
+app.get('/api/profile/state', async (req, res) => {
+  try {
+    const session = requireAllowedProfileSession(req, res);
+    if (!session) return;
+
+    const state = await readProfileState(session.user.login);
+    res.json({ ok: true, state });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message || 'Не удалось загрузить профильную историю'
+    });
+  }
+});
+
+app.put('/api/profile/state', async (req, res) => {
+  try {
+    const session = requireAllowedProfileSession(req, res);
+    if (!session) return;
+
+    const state = normalizeProfileState(req.body?.state || req.body || {});
+    await writeProfileState(session.user.login, state);
+    res.json({ ok: true, state });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message || 'Не удалось сохранить профильную историю'
+    });
+  }
+});
+
 app.post('/api/analyze', async (req, res) => {
   try {
     const repoInput = String(req.body?.repoUrl || '').trim();
@@ -373,6 +406,77 @@ function readSession(req) {
 function canUsePrivateAnalyzer(session) {
   const login = String(session?.user?.login || '').toLowerCase();
   return Boolean(login && login === ALLOWED_GITHUB_LOGIN);
+}
+
+function requireAllowedProfileSession(req, res) {
+  const session = readSession(req);
+  if (!session?.user || !session.accessToken) {
+    res.status(401).json({
+      ok: false,
+      error: 'Нужно войти через GitHub, чтобы загрузить профильные данные.',
+      reauthRequired: true
+    });
+    return null;
+  }
+
+  if (!canUsePrivateAnalyzer(session)) {
+    res.status(403).json({
+      ok: false,
+      error: 'Доступ к истории и избранному разрешён только GitHub пользователю Zulut30.',
+      forbidden: true
+    });
+    return null;
+  }
+
+  return session;
+}
+
+async function readProfileState(login) {
+  const store = await readUserStateStore();
+  return normalizeProfileState(store[profileStateKey(login)] || {});
+}
+
+async function writeProfileState(login, state) {
+  const store = await readUserStateStore();
+  const normalized = normalizeProfileState(state);
+  store[profileStateKey(login)] = normalized;
+  await writeUserStateStore(store);
+  return normalized;
+}
+
+async function readUserStateStore() {
+  try {
+    const raw = await fs.promises.readFile(USER_STATE_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (error) {
+    if (error.code === 'ENOENT') return {};
+    throw error;
+  }
+}
+
+async function writeUserStateStore(store) {
+  await fs.promises.mkdir(DATA_DIR, { recursive: true });
+  const tempFile = `${USER_STATE_FILE}.tmp`;
+  await fs.promises.writeFile(tempFile, `${JSON.stringify(store, null, 2)}\n`, 'utf8');
+  await fs.promises.rename(tempFile, USER_STATE_FILE);
+}
+
+function normalizeProfileState(value) {
+  return {
+    history: normalizeStoredItems(value?.history, 80),
+    favorites: normalizeStoredItems(value?.favorites, 80),
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function normalizeStoredItems(value, maxItems) {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item) => item && typeof item === 'object').slice(0, maxItems);
+}
+
+function profileStateKey(login) {
+  return String(login || '').trim().toLowerCase();
 }
 
 function setSessionCookie(res, req, sid) {

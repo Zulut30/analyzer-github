@@ -32,19 +32,34 @@ let currentPayload = null;
 let authState = { authenticated: false, user: null, oauthConfigured: false, canAnalyze: false, allowedLogin: 'zulut30' };
 let profileReposState = { status: 'idle', repositories: [], error: '' };
 let profileRepoQuery = '';
+let profileStateStatus = 'idle';
+let profileStateLoadedFor = '';
+let profileStateTimer = null;
 
 const themes = [
   { id: 'light', label: 'Светлая' },
   { id: 'dark', label: 'Тёмная' },
   { id: 'sky', label: 'Синяя' },
-  { id: 'graphite', label: 'Графит' }
+  { id: 'graphite', label: 'Графит' },
+  { id: 'aurora', label: 'Аврора' },
+  { id: 'frost', label: 'Стекло' },
+  { id: 'rose', label: 'Роза' },
+  { id: 'ember', label: 'Янтарь' },
+  { id: 'violet', label: 'Ирис' },
+  { id: 'mono', label: 'Моно' }
 ];
 
 const themeColors = {
   light: '#f4fbfb',
   dark: '#0d1417',
   sky: '#f3f8ff',
-  graphite: '#101113'
+  graphite: '#101113',
+  aurora: '#081916',
+  frost: '#f8fbff',
+  rose: '#fff6f8',
+  ember: '#17110c',
+  violet: '#110f20',
+  mono: '#f6f7f7'
 };
 
 const emojiBasePath = '/assets/emoji/';
@@ -231,6 +246,7 @@ clearHistory.addEventListener('click', () => {
   localStorage.removeItem(historyKey);
   renderAllHistory();
   renderProfile();
+  scheduleProfileStateSync();
 });
 
 historySearch.addEventListener('input', renderHistoryPage);
@@ -545,14 +561,15 @@ function saveHistory(payload) {
       primaryLanguage: repo.primaryLanguage || normalizeArray(payload.languages)[0]?.name || '',
       score: score.value,
       createdAt: new Date().toISOString(),
-      payload
+      payload: compactPayload(payload)
     },
     ...current.filter((item) => item.repoUrl !== repo.url)
-  ].slice(0, 30);
+  ].slice(0, 80);
 
   localStorage.setItem(historyKey, JSON.stringify(next));
   renderAllHistory();
   renderProfile();
+  scheduleProfileStateSync();
 }
 
 function renderAllHistory() {
@@ -702,7 +719,7 @@ function normalizeFavoriteEntry(item) {
     primaryLanguage: item.primaryLanguage || payload.repo?.primaryLanguage || normalizeArray(payload.languages)[0]?.name || '',
     score: Number(item.score || normalizeScore(payload.analysis?.score).value || 0),
     createdAt: item.createdAt || new Date().toISOString(),
-    payload
+    payload: compactPayload(payload)
   };
 }
 
@@ -739,7 +756,7 @@ function toggleCurrentFavorite() {
       primaryLanguage: repo.primaryLanguage || normalizeArray(currentPayload.languages)[0]?.name || '',
       score: score.value,
       createdAt: new Date().toISOString(),
-      payload: currentPayload
+      payload: compactPayload(currentPayload)
     };
 
     saveFavorites([nextItem, ...favorites.filter((item) => item.repoUrl !== nextItem.repoUrl)].slice(0, 60));
@@ -769,6 +786,8 @@ function favoriteKeyFor(payload) {
 }
 
 function readFavorites() {
+  if (!canUseAnalyzer()) return [];
+
   try {
     const parsed = JSON.parse(localStorage.getItem(favoritesKey) || '[]');
     return Array.isArray(parsed) ? parsed : [];
@@ -778,7 +797,30 @@ function readFavorites() {
 }
 
 function saveFavorites(items) {
-  localStorage.setItem(favoritesKey, JSON.stringify(items));
+  const nextItems = normalizeArray(items).map(compactSavedItem).slice(0, 80);
+  localStorage.setItem(favoritesKey, JSON.stringify(nextItems));
+  scheduleProfileStateSync();
+}
+
+function compactSavedItem(item) {
+  if (!item || typeof item !== 'object') return item;
+  return {
+    ...item,
+    payload: item.payload ? compactPayload(item.payload) : item.payload
+  };
+}
+
+function compactPayload(payload) {
+  if (!payload || typeof payload !== 'object') return payload;
+
+  try {
+    const copy = JSON.parse(JSON.stringify(payload));
+    delete copy.rawAnalysis;
+    return copy;
+  } catch {
+    const { rawAnalysis, ...copy } = payload;
+    return copy;
+  }
 }
 
 function renderFavoritesPage() {
@@ -857,12 +899,20 @@ async function loadProfile() {
 
   if (!authState.authenticated) {
     profileReposState = { status: 'idle', repositories: [], error: '' };
+    profileStateStatus = 'idle';
+    profileStateLoadedFor = '';
   }
 
   renderProfile();
   updateAnalyzeAccessUI();
-  if (canUseAnalyzer() && profileReposState.status === 'idle') {
-    loadProfileRepositories();
+  if (canUseAnalyzer()) {
+    const loginKey = String(authState.user?.login || '').toLowerCase();
+    if (profileStateLoadedFor !== loginKey && profileStateStatus !== 'loading') {
+      loadProfileState();
+    }
+    if (profileReposState.status === 'idle') {
+      loadProfileRepositories();
+    }
   }
 }
 
@@ -894,6 +944,113 @@ async function loadProfileRepositories() {
   renderProfile();
 }
 
+async function loadProfileState() {
+  if (!canUseAnalyzer()) return;
+
+  const loginKey = String(authState.user?.login || authState.allowedLogin || '').toLowerCase();
+  profileStateStatus = 'loading';
+  renderProfile();
+
+  try {
+    const localHistory = readHistory();
+    const localFavorites = readFavorites();
+    const response = await fetch('/api/profile/state', { headers: { Accept: 'application/json' } });
+    const payload = await response.json();
+
+    if (!response.ok || !payload.ok) {
+      throw new Error(payload.error || 'Не удалось загрузить историю профиля');
+    }
+
+    const remoteState = payload.state || {};
+    const history = mergeStoredItems(remoteState.history, localHistory).map(compactSavedItem).slice(0, 80);
+    const favorites = mergeStoredItems(remoteState.favorites, localFavorites).map(compactSavedItem).slice(0, 80);
+    const changed =
+      history.length !== normalizeArray(remoteState.history).length ||
+      favorites.length !== normalizeArray(remoteState.favorites).length;
+
+    localStorage.setItem(historyKey, JSON.stringify(history));
+    localStorage.setItem(favoritesKey, JSON.stringify(favorites));
+    profileStateStatus = 'ready';
+    profileStateLoadedFor = loginKey;
+
+    renderAllHistory();
+    renderFavoritesPage();
+    syncFavoriteButton();
+    renderProfile();
+
+    if (changed) scheduleProfileStateSync();
+  } catch (error) {
+    profileStateStatus = 'error';
+    profileStateLoadedFor = loginKey;
+    showToast(error.message || 'Не удалось загрузить историю профиля');
+    renderProfile();
+  }
+}
+
+function scheduleProfileStateSync() {
+  if (!canUseAnalyzer()) return;
+  window.clearTimeout(profileStateTimer);
+  profileStateTimer = window.setTimeout(syncProfileState, 350);
+}
+
+async function syncProfileState() {
+  if (!canUseAnalyzer()) return;
+
+  try {
+    const response = await fetch('/api/profile/state', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        state: {
+          history: readHistory().map(compactSavedItem).slice(0, 80),
+          favorites: readFavorites().map(compactSavedItem).slice(0, 80)
+        }
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok || !payload.ok) {
+      throw new Error(payload.error || 'Не удалось сохранить историю профиля');
+    }
+
+    profileStateStatus = 'ready';
+  } catch (error) {
+    profileStateStatus = 'error';
+    showToast(error.message || 'Не удалось сохранить историю профиля');
+  } finally {
+    renderProfile();
+  }
+}
+
+function mergeStoredItems(primary, secondary) {
+  const merged = [];
+  const seen = new Set();
+
+  for (const item of [...normalizeArray(primary), ...normalizeArray(secondary)]) {
+    const compactItem = compactSavedItem(item);
+    const key = favoriteKeyForSavedItem(compactItem) || JSON.stringify(compactItem);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    merged.push(compactItem);
+  }
+
+  return merged;
+}
+
+function renderProfileStateNotice() {
+  if (!canUseAnalyzer()) return '';
+
+  const login = authState.user?.login || authState.allowedLogin || 'Zulut30';
+  const messages = {
+    loading: `История и избранное загружаются из профиля @${login}.`,
+    ready: `История и избранное привязаны к профилю @${login}.`,
+    error: `Не удалось синхронизировать историю профиля @${login}. Локальная копия останется доступной.`
+  };
+
+  const text = messages[profileStateStatus] || messages.ready;
+  return `<div class="profile-sync">${escapeHtml(text)}</div>`;
+}
+
 function renderProfile() {
   if (!profileCard) return;
 
@@ -918,6 +1075,7 @@ function renderProfile() {
         <div><span>История</span><strong>${historyCount}</strong></div>
         <div><span>Избранное</span><strong>${favoritesCount}</strong></div>
       </div>
+      ${renderProfileStateNotice()}
       ${canUseAnalyzer() ? renderProfileRepositories() : renderProfileAccessBlocked()}
       <form class="profile-actions" method="post" action="/auth/logout">
         <button type="submit">Выйти</button>
@@ -954,7 +1112,7 @@ function renderProfile() {
       <div>
         <span>GitHub профиль</span>
         <h2>Войдите, чтобы связать рабочее пространство</h2>
-        <p>История и избранное пока хранятся в этом браузере.</p>
+        <p>Войдите разрешённым GitHub-профилем, чтобы история и избранное синхронизировались с аккаунтом.</p>
       </div>
     </div>
     <div class="profile-stats">
@@ -1287,6 +1445,8 @@ function safeFileBase(value) {
 }
 
 function readHistory() {
+  if (!canUseAnalyzer()) return [];
+
   try {
     const parsed = JSON.parse(localStorage.getItem(historyKey) || '[]');
     return Array.isArray(parsed) ? parsed : [];

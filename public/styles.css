@@ -14,6 +14,16 @@
   --coral: #df6a4f;
   --shadow: 0 18px 46px rgba(12, 36, 34, 0.1);
   --shadow-soft: 0 10px 24px rgba(12, 36, 34, 0.07);
+  --glass: color-mix(in srgb, var(--surface) 68%, transparent);
+  --glass-strong: color-mix(in srgb, var(--surface) 82%, transparent);
+  --glass-muted: color-mix(in srgb, var(--surface-muted) 58%, transparent);
+  --glass-border: color-mix(in srgb, white 44%, var(--border));
+  --glass-highlight: color-mix(in srgb, white 62%, transparent);
+  --mesh-a: color-mix(in srgb, var(--accent) 22%, transparent);
+  --mesh-b: color-mix(in srgb, var(--blue) 18%, transparent);
+  --mesh-c: color-mix(in srgb, var(--amber) 14%, transparent);
+  --control-radius: 16px;
+  --panel-radius: 18px;
 }
 
 :root[data-theme='dark'] {
@@ -32,6 +42,11 @@
   --coral: #ff8d73;
   --shadow: 0 20px 54px rgba(0, 0, 0, 0.28);
   --shadow-soft: 0 12px 28px rgba(0, 0, 0, 0.22);
+  --glass-border: color-mix(in srgb, white 18%, var(--border));
+  --glass-highlight: color-mix(in srgb, white 22%, transparent);
+  --mesh-a: color-mix(in srgb, var(--accent) 18%, transparent);
+  --mesh-b: color-mix(in srgb, var(--blue) 16%, transparent);
+  --mesh-c: color-mix(in srgb, var(--coral) 12%, transparent);
 }
 
 :root[data-theme='sky'] {
@@ -50,6 +65,9 @@
   --coral: #db6b63;
   --shadow: 0 18px 46px rgba(31, 74, 115, 0.12);
   --shadow-soft: 0 10px 24px rgba(31, 74, 115, 0.08);
+  --mesh-a: color-mix(in srgb, var(--blue) 20%, transparent);
+  --mesh-b: color-mix(in srgb, var(--accent) 14%, transparent);
+  --mesh-c: color-mix(in srgb, var(--amber) 13%, transparent);
 }
 
 :root[data-theme='graphite'] {
@@ -68,6 +86,143 @@
   --coral: #ff7f6f;
   --shadow: 0 22px 56px rgba(0, 0, 0, 0.32);
   --shadow-soft: 0 12px 28px rgba(0, 0, 0, 0.24);
+  --glass-border: color-mix(in srgb, white 16%, var(--border));
+  --glass-highlight: color-mix(in srgb, white 20%, transparent);
+  --mesh-a: color-mix(in srgb, var(--accent) 18%, transparent);
+  --mesh-b: color-mix(in srgb, var(--blue) 14%, transparent);
+  --mesh-c: color-mix(in srgb, var(--amber) 11%, transparent);
+}
+
+:root[data-theme='aurora'] {
+  color-scheme: dark;
+  --bg: #081916;
+  --bg-strong: #0d2521;
+  --surface: #102a26;
+  --surface-muted: #173730;
+  --text: #effff9;
+  --muted: #a7c8c0;
+  --border: #245149;
+  --accent: #42e5bb;
+  --accent-strong: #b7ffe8;
+  --blue: #65a7ff;
+  --amber: #f6d16b;
+  --coral: #ff8f84;
+  --shadow: 0 24px 64px rgba(0, 0, 0, 0.34);
+  --shadow-soft: 0 14px 34px rgba(0, 0, 0, 0.24);
+  --glass-border: color-mix(in srgb, white 18%, var(--border));
+  --glass-highlight: color-mix(in srgb, white 24%, transparent);
+  --mesh-a: color-mix(in srgb, var(--accent) 22%, transparent);
+  --mesh-b: color-mix(in srgb, var(--blue) 18%, transparent);
+  --mesh-c: color-mix(in srgb, var(--amber) 12%, transparent);
+}
+
+:root[data-theme='frost'] {
+  color-scheme: light;
+  --bg: #f8fbff;
+  --bg-strong: #e8f3ff;
+  --surface: #ffffff;
+  --surface-muted: #edf6fb;
+  --text: #10202b;
+  --muted: #60717d;
+  --border: #d7e5ee;
+  --accent: #18a8a8;
+  --accent-strong: #097878;
+  --blue: #3d7df0;
+  --amber: #efb84f;
+  --coral: #dc6d75;
+  --shadow: 0 20px 52px rgba(47, 87, 117, 0.12);
+  --shadow-soft: 0 10px 26px rgba(47, 87, 117, 0.08);
+  --mesh-a: color-mix(in srgb, var(--accent) 18%, transparent);
+  --mesh-b: color-mix(in srgb, var(--blue) 14%, transparent);
+  --mesh-c: color-mix(in srgb, var(--coral) 10%, transparent);
+}
+
+:root[data-theme='rose'] {
+  color-scheme: light;
+  --bg: #fff6f8;
+  --bg-strong: #f8e9ef;
+  --surface: #ffffff;
+  --surface-muted: #fbedf2;
+  --text: #26141d;
+  --muted: #745f67;
+  --border: #ead5dc;
+  --accent: #d93f7b;
+  --accent-strong: #9f2658;
+  --blue: #4f7fe5;
+  --amber: #e6ad3b;
+  --coral: #e66b5f;
+  --shadow: 0 20px 52px rgba(121, 57, 82, 0.13);
+  --shadow-soft: 0 10px 24px rgba(121, 57, 82, 0.08);
+  --mesh-a: color-mix(in srgb, var(--accent) 16%, transparent);
+  --mesh-b: color-mix(in srgb, var(--blue) 12%, transparent);
+  --mesh-c: color-mix(in srgb, var(--amber) 12%, transparent);
+}
+
+:root[data-theme='ember'] {
+  color-scheme: dark;
+  --bg: #17110c;
+  --bg-strong: #231913;
+  --surface: #241a15;
+  --surface-muted: #30231c;
+  --text: #fff8ef;
+  --muted: #d1b9a8;
+  --border: #4d382d;
+  --accent: #ffb347;
+  --accent-strong: #ffe0a6;
+  --blue: #65b5ff;
+  --amber: #ffd166;
+  --coral: #ff7d64;
+  --shadow: 0 24px 64px rgba(0, 0, 0, 0.36);
+  --shadow-soft: 0 14px 34px rgba(0, 0, 0, 0.26);
+  --glass-border: color-mix(in srgb, white 18%, var(--border));
+  --glass-highlight: color-mix(in srgb, white 22%, transparent);
+  --mesh-a: color-mix(in srgb, var(--amber) 18%, transparent);
+  --mesh-b: color-mix(in srgb, var(--blue) 12%, transparent);
+  --mesh-c: color-mix(in srgb, var(--coral) 15%, transparent);
+}
+
+:root[data-theme='violet'] {
+  color-scheme: dark;
+  --bg: #110f20;
+  --bg-strong: #1b1633;
+  --surface: #1f1a36;
+  --surface-muted: #2a2445;
+  --text: #fbf8ff;
+  --muted: #c2b9d9;
+  --border: #443b63;
+  --accent: #b68cff;
+  --accent-strong: #e5d7ff;
+  --blue: #61b5ff;
+  --amber: #f5ca6d;
+  --coral: #ff7fa5;
+  --shadow: 0 24px 64px rgba(0, 0, 0, 0.38);
+  --shadow-soft: 0 14px 34px rgba(0, 0, 0, 0.27);
+  --glass-border: color-mix(in srgb, white 18%, var(--border));
+  --glass-highlight: color-mix(in srgb, white 24%, transparent);
+  --mesh-a: color-mix(in srgb, var(--accent) 19%, transparent);
+  --mesh-b: color-mix(in srgb, var(--blue) 15%, transparent);
+  --mesh-c: color-mix(in srgb, var(--coral) 12%, transparent);
+}
+
+:root[data-theme='mono'] {
+  color-scheme: light;
+  --bg: #f6f7f7;
+  --bg-strong: #e9eeee;
+  --surface: #ffffff;
+  --surface-muted: #eff3f2;
+  --text: #111716;
+  --muted: #63706d;
+  --border: #d7dfdc;
+  --accent: #0f766e;
+  --accent-strong: #084c47;
+  --blue: #536a7a;
+  --amber: #c5a24d;
+  --coral: #b85f57;
+  --shadow: 0 18px 46px rgba(17, 23, 22, 0.09);
+  --shadow-soft: 0 10px 24px rgba(17, 23, 22, 0.06);
+  --mesh-a: color-mix(in srgb, var(--accent) 12%, transparent);
+  --mesh-b: color-mix(in srgb, var(--blue) 10%, transparent);
+  --mesh-c: color-mix(in srgb, var(--amber) 9%, transparent);
 }
 
 * {
@@ -78,8 +233,10 @@ body {
   margin: 0;
   min-width: 320px;
   background:
-    radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 18%, transparent), transparent 34rem),
-    linear-gradient(180deg, var(--bg-strong), var(--bg) 18rem);
+    linear-gradient(135deg, var(--mesh-a), transparent 34%, var(--mesh-b) 66%, transparent),
+    linear-gradient(225deg, transparent 8%, var(--mesh-c) 42%, transparent 76%),
+    conic-gradient(from 220deg at 50% -10%, var(--bg-strong), var(--bg), var(--surface-muted), var(--bg));
+  background-attachment: fixed;
   color: var(--text);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -114,9 +271,14 @@ button {
   isolation: isolate;
   padding: 12px clamp(18px, 4vw, 56px);
   border-bottom: 1px solid color-mix(in srgb, var(--border) 74%, transparent);
-  background: color-mix(in srgb, var(--surface) 82%, transparent);
-  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.08);
-  backdrop-filter: blur(18px);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--glass-highlight) 20%, transparent), transparent),
+    color-mix(in srgb, var(--surface) 66%, transparent);
+  box-shadow:
+    0 16px 46px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 color-mix(in srgb, white 34%, transparent);
+  -webkit-backdrop-filter: blur(28px) saturate(1.35);
+  backdrop-filter: blur(28px) saturate(1.35);
 }
 
 .app-header::after {
@@ -161,18 +323,17 @@ button {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--glass-border) 84%, transparent);
+  border-radius: var(--control-radius);
   background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--surface) 92%, var(--surface-muted)),
-      color-mix(in srgb, var(--surface-muted) 70%, var(--surface))
-    );
+    linear-gradient(135deg, color-mix(in srgb, var(--glass-highlight) 18%, transparent), transparent 48%),
+    var(--glass);
   padding: 5px;
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 24%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 32%, transparent),
     var(--shadow-soft);
+  -webkit-backdrop-filter: blur(22px) saturate(1.35);
+  backdrop-filter: blur(22px) saturate(1.35);
 }
 
 .main-nav a {
@@ -182,7 +343,7 @@ button {
   min-width: 92px;
   min-height: 38px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: calc(var(--control-radius) - 5px);
   color: var(--muted);
   font-size: 14px;
   font-weight: 760;
@@ -204,9 +365,13 @@ button {
 }
 
 .main-nav a.is-active {
-  border-color: color-mix(in srgb, var(--accent) 42%, transparent);
-  background: linear-gradient(135deg, var(--accent), var(--blue));
-  box-shadow: 0 10px 22px rgba(12, 143, 131, 0.24);
+  border-color: color-mix(in srgb, white 28%, var(--accent));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, white 24%, transparent), transparent 45%),
+    linear-gradient(135deg, var(--accent), var(--blue));
+  box-shadow:
+    0 10px 24px color-mix(in srgb, var(--accent) 28%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 38%, transparent);
   color: white;
   transform: translateY(-1px);
 }
@@ -217,19 +382,20 @@ button {
   justify-self: end;
   gap: 8px;
   min-height: 42px;
-  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--glass-border) 84%, transparent);
+  border-radius: var(--control-radius);
   background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--surface) 92%, var(--surface-muted)),
-      color-mix(in srgb, var(--surface-muted) 64%, var(--surface))
-    );
+    linear-gradient(135deg, color-mix(in srgb, var(--glass-highlight) 18%, transparent), transparent 50%),
+    var(--glass);
   color: var(--text);
   padding: 0 14px;
   font-size: 14px;
   font-weight: 750;
-  box-shadow: var(--shadow-soft);
+  box-shadow:
+    var(--shadow-soft),
+    inset 0 1px 0 color-mix(in srgb, white 30%, transparent);
+  -webkit-backdrop-filter: blur(22px) saturate(1.35);
+  backdrop-filter: blur(22px) saturate(1.35);
   transition:
     border-color 0.18s ease,
     box-shadow 0.18s ease,
@@ -257,7 +423,10 @@ button {
   border-radius: 50%;
 }
 
-:root[data-theme='dark'] .sun-icon {
+:root[data-theme='dark'] .sun-icon,
+:root[data-theme='aurora'] .sun-icon,
+:root[data-theme='ember'] .sun-icon,
+:root[data-theme='violet'] .sun-icon {
   border-width: 0;
   background: currentColor;
   box-shadow: -5px -2px 0 0 var(--surface);
@@ -301,11 +470,18 @@ button {
 .favorites-page,
 .profile-page,
 .profile-card,
+.profile-sync,
 .favorite-card {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface) 96%, transparent);
-  box-shadow: var(--shadow);
+  border: 1px solid color-mix(in srgb, var(--glass-border) 78%, transparent);
+  border-radius: var(--panel-radius);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--glass-highlight) 18%, transparent), transparent 42%),
+    var(--glass);
+  box-shadow:
+    var(--shadow),
+    inset 0 1px 0 color-mix(in srgb, white 32%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(1.32);
+  backdrop-filter: blur(24px) saturate(1.32);
 }
 
 .query-panel {
@@ -399,15 +575,16 @@ button {
 .repo-form {
   display: grid;
   gap: 11px;
-  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
-  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--glass-border) 82%, transparent);
+  border-radius: var(--panel-radius);
   background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--surface) 88%, transparent),
-      color-mix(in srgb, var(--surface-muted) 72%, var(--surface))
-    );
-  box-shadow: var(--shadow-soft);
+    linear-gradient(135deg, color-mix(in srgb, var(--glass-highlight) 18%, transparent), transparent 48%),
+    var(--glass);
+  box-shadow:
+    var(--shadow-soft),
+    inset 0 1px 0 color-mix(in srgb, white 28%, transparent);
+  -webkit-backdrop-filter: blur(22px) saturate(1.3);
+  backdrop-filter: blur(22px) saturate(1.3);
   padding: 18px;
 }
 
@@ -428,12 +605,15 @@ button {
 .history-toolbar input {
   width: 100%;
   min-height: 52px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface) 88%, var(--surface-muted));
+  border: 1px solid color-mix(in srgb, var(--glass-border) 82%, transparent);
+  border-radius: calc(var(--control-radius) - 4px);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--glass-highlight) 12%, transparent), transparent),
+    color-mix(in srgb, var(--surface) 64%, transparent);
   color: var(--text);
   padding: 0 16px;
   outline: none;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 24%, transparent);
 }
 
 .input-row input:focus,
@@ -457,9 +637,13 @@ button {
   gap: 10px;
   min-height: 52px;
   padding: 0 18px;
-  background: linear-gradient(135deg, var(--accent), var(--blue));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, white 24%, transparent), transparent 44%),
+    linear-gradient(135deg, var(--accent), var(--blue));
   color: white;
-  box-shadow: 0 12px 22px rgba(12, 143, 131, 0.22);
+  box-shadow:
+    0 12px 24px color-mix(in srgb, var(--accent) 26%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 34%, transparent);
 }
 
 .input-row button:hover {
@@ -499,9 +683,9 @@ button {
 
 .example-row button,
 .panel-heading a {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-muted);
+  border: 1px solid color-mix(in srgb, var(--glass-border) 74%, transparent);
+  border-radius: calc(var(--control-radius) - 6px);
+  background: var(--glass-muted);
   color: var(--muted);
   padding: 7px 10px;
   font-size: 13px;
@@ -545,9 +729,11 @@ button {
   align-items: center;
   gap: 10px;
   width: 100%;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface) 88%, var(--surface-muted));
+  border: 1px solid color-mix(in srgb, var(--glass-border) 70%, transparent);
+  border-radius: calc(var(--control-radius) - 5px);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--glass-highlight) 14%, transparent), transparent 50%),
+    color-mix(in srgb, var(--surface) 66%, transparent);
   padding: 10px;
   color: var(--text);
   text-align: left;
@@ -769,19 +955,25 @@ button {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface) 92%, var(--surface-muted));
-  box-shadow: var(--shadow-soft);
+  border: 1px solid color-mix(in srgb, var(--glass-border) 78%, transparent);
+  border-radius: var(--panel-radius);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--glass-highlight) 16%, transparent), transparent 44%),
+    var(--glass);
+  box-shadow:
+    var(--shadow-soft),
+    inset 0 1px 0 color-mix(in srgb, white 26%, transparent);
+  -webkit-backdrop-filter: blur(22px) saturate(1.28);
+  backdrop-filter: blur(22px) saturate(1.28);
   padding: 12px;
 }
 
 .result-actions button,
 .card-title-row button,
 .download-actions button {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--glass-border) 78%, transparent);
+  border-radius: calc(var(--control-radius) - 5px);
+  background: var(--glass-strong);
   color: var(--text);
   padding: 9px 11px;
   font-size: 13px;
@@ -914,9 +1106,11 @@ button {
   grid-template-columns: 76px minmax(0, 1fr);
   gap: 14px;
   align-items: center;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface) 84%, var(--surface-muted));
+  border: 1px solid color-mix(in srgb, var(--glass-border) 70%, transparent);
+  border-radius: calc(var(--panel-radius) - 6px);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--lang-color) 9%, transparent), transparent 50%),
+    color-mix(in srgb, var(--surface) 68%, transparent);
   padding: 10px;
 }
 
@@ -973,10 +1167,10 @@ button {
 
 .tag {
   display: block;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--glass-border) 70%, transparent);
+  border-radius: calc(var(--panel-radius) - 8px);
   padding: 10px;
-  background: color-mix(in srgb, var(--surface) 88%, var(--surface-muted));
+  background: color-mix(in srgb, var(--surface) 66%, transparent);
 }
 
 .tag strong,
@@ -1032,7 +1226,7 @@ button {
 
 .secondary-button {
   min-height: 42px;
-  background: var(--surface-muted);
+  background: var(--glass-muted);
   color: var(--muted);
   padding: 0 14px;
 }
@@ -1103,9 +1297,9 @@ button {
 }
 
 .history-card-meta span {
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--glass-border) 70%, transparent);
   border-radius: 999px;
-  background: var(--surface-muted);
+  background: var(--glass-muted);
   color: var(--muted);
   padding: 6px 9px;
   font-size: 12px;
@@ -1120,13 +1314,15 @@ button {
 }
 
 .history-actions button {
-  background: var(--accent);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, white 20%, transparent), transparent 46%),
+    var(--accent);
   color: white;
   padding: 9px 12px;
 }
 
 .history-actions button + button {
-  background: var(--surface-muted);
+  background: var(--glass-muted);
   color: var(--text);
 }
 
@@ -1212,9 +1408,11 @@ button {
 }
 
 .profile-stats div {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-muted);
+  border: 1px solid color-mix(in srgb, var(--glass-border) 72%, transparent);
+  border-radius: calc(var(--panel-radius) - 6px);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--glass-highlight) 14%, transparent), transparent 50%),
+    var(--glass-muted);
   padding: 14px;
 }
 
@@ -1239,8 +1437,10 @@ button {
   width: fit-content;
   min-height: 44px;
   border: 0;
-  border-radius: 8px;
-  background: linear-gradient(135deg, var(--accent), var(--blue));
+  border-radius: calc(var(--control-radius) - 3px);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, white 24%, transparent), transparent 44%),
+    linear-gradient(135deg, var(--accent), var(--blue));
   color: white;
   padding: 0 16px;
   font-weight: 850;
@@ -1260,11 +1460,20 @@ button {
 }
 
 .profile-notice {
-  border: 1px solid color-mix(in srgb, var(--accent) 36%, var(--border));
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 36%, var(--glass-border));
+  border-radius: calc(var(--panel-radius) - 6px);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent 48%),
+    var(--glass-muted);
   color: var(--text);
   padding: 11px 12px;
+  font-weight: 800;
+}
+
+.profile-sync {
+  padding: 12px 14px;
+  color: var(--muted);
+  font-size: 13px;
   font-weight: 800;
 }
 
@@ -1308,9 +1517,9 @@ button {
 .profile-repo-toolbar input {
   width: 100%;
   min-height: 44px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface) 88%, var(--surface-muted));
+  border: 1px solid color-mix(in srgb, var(--glass-border) 76%, transparent);
+  border-radius: calc(var(--control-radius) - 5px);
+  background: color-mix(in srgb, var(--surface) 64%, transparent);
   color: var(--text);
   padding: 0 13px;
   outline: none;
@@ -1341,9 +1550,11 @@ button {
   grid-template-columns: 42px minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface) 88%, var(--surface-muted));
+  border: 1px solid color-mix(in srgb, var(--glass-border) 72%, transparent);
+  border-radius: calc(var(--panel-radius) - 6px);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--glass-highlight) 13%, transparent), transparent 50%),
+    color-mix(in srgb, var(--surface) 66%, transparent);
   padding: 12px;
 }
 
@@ -1413,7 +1624,7 @@ button {
   justify-content: center;
   min-height: 36px;
   border: 0;
-  border-radius: 8px;
+  border-radius: calc(var(--control-radius) - 6px);
   padding: 0 11px;
   font-size: 13px;
   font-weight: 850;
@@ -1421,14 +1632,16 @@ button {
 }
 
 .profile-repo-actions button {
-  background: linear-gradient(135deg, var(--accent), var(--blue));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, white 22%, transparent), transparent 44%),
+    linear-gradient(135deg, var(--accent), var(--blue));
   color: white;
 }
 
 .profile-repo-actions a {
-  background: var(--surface);
+  background: var(--glass-strong);
   color: var(--text);
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--glass-border) 78%, transparent);
 }
 
 .profile-repo-empty {
@@ -1457,6 +1670,32 @@ button {
 
 .toast[hidden] {
   display: none;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .app-header,
+  .main-nav,
+  .theme-toggle,
+  .search-panel .input-row,
+  .query-panel,
+  .side-panel,
+  .status-panel,
+  .error-panel,
+  .result-banner,
+  .result-card,
+  .repo-stats div,
+  .history-page,
+  .history-toolbar,
+  .history-card,
+  .favorites-page,
+  .profile-page,
+  .profile-card,
+  .profile-sync,
+  .favorite-card,
+  .repo-form,
+  .result-actions {
+    background: var(--surface);
+  }
 }
 
 @keyframes spin {
@@ -1708,10 +1947,17 @@ button {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 6px;
   align-items: center;
-  border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface) 90%, transparent);
-  box-shadow: 0 22px 70px rgba(12, 36, 34, 0.13);
+  border: 1px solid color-mix(in srgb, var(--glass-border) 82%, transparent);
+  border-radius: 22px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--glass-highlight) 24%, transparent), transparent 46%),
+    var(--glass-strong);
+  box-shadow:
+    0 26px 80px color-mix(in srgb, var(--text) 12%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 36%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--text) 8%, transparent);
+  -webkit-backdrop-filter: blur(30px) saturate(1.45);
+  backdrop-filter: blur(30px) saturate(1.45);
   padding: 6px;
   transition:
     border-color 0.18s ease,
@@ -1723,7 +1969,8 @@ button {
   border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
   box-shadow:
     0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent),
-    0 24px 76px rgba(12, 36, 34, 0.16);
+    0 28px 86px color-mix(in srgb, var(--accent) 18%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 42%, transparent);
   transform: translateY(-1px);
 }
 
@@ -1745,7 +1992,10 @@ button {
 .search-panel .input-row button {
   min-width: 188px;
   min-height: 54px;
-  box-shadow: none;
+  border-radius: 17px;
+  box-shadow:
+    0 12px 26px color-mix(in srgb, var(--accent) 28%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 34%, transparent);
 }
 
 .access-note {
