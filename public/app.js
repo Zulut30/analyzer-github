@@ -1573,12 +1573,28 @@ function renderPageSpeedCard(data) {
 
   const mobile = data.results?.mobile || {};
   const desktop = data.results?.desktop || {};
+  const notes = [
+    data.note,
+    mobile.error ? `Mobile: ${mobile.error}` : '',
+    desktop.error ? `Desktop: ${desktop.error}` : '',
+    ...normalizeArray(mobile.runWarnings).map((item) => `Mobile warning: ${item}`),
+    ...normalizeArray(desktop.runWarnings).map((item) => `Desktop warning: ${item}`)
+  ].filter(Boolean);
+
   return renderToolCard('PageSpeed', data.ok ? 'ok' : 'warning', [
-    ['Mobile', mobile.performanceScore ?? mobile.error ?? '-'],
-    ['Desktop', desktop.performanceScore ?? desktop.error ?? '-'],
-    ['SEO mobile', mobile.seoScore ?? '-'],
-    ['Best practices', mobile.bestPracticesScore ?? '-']
-  ]);
+    ['Mobile perf', formatScorePercent(mobile.performanceScore)],
+    ['Desktop perf', formatScorePercent(desktop.performanceScore)],
+    ['SEO mobile', formatScorePercent(mobile.seoScore)],
+    ['Best practices', formatScorePercent(mobile.bestPracticesScore)],
+    ['Accessibility', formatScorePercent(mobile.accessibilityScore)],
+    ['LCP mobile', mobile.metrics?.largestContentfulPaint || '-'],
+    ['Speed Index', mobile.metrics?.speedIndex || '-'],
+    ['TBT mobile', mobile.metrics?.totalBlockingTime || '-']
+  ], notes);
+}
+
+function formatScorePercent(value) {
+  return value === 0 || value ? `${value}/100` : '-';
 }
 
 function renderToolCard(title, status, metrics, notes = []) {

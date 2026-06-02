@@ -224,6 +224,9 @@ function createToolsService({ dataDir, pagespeedApiKey = '', logger = console } 
 async function runToolsCheck(inputUrl, options = {}) {
   const started = performance.now();
   const requested = normalizeRequestedChecks(options.requestedChecks);
+  const baseRequested = requested.includes('pagespeed') && !requested.includes('availability')
+    ? ['availability', ...requested]
+    : requested;
   const target = await normalizePublicUrl(inputUrl);
   const check = {
     id: cryptoId(),
@@ -248,10 +251,10 @@ async function runToolsCheck(inputUrl, options = {}) {
   };
 
   const baseChecks = await Promise.allSettled([
-    requested.includes('availability') ? checkAvailability(target.url) : null,
-    requested.includes('port') ? checkPort(target) : null,
-    requested.includes('ssl') ? checkSsl(target) : null,
-    requested.includes('dns') ? checkDns(target) : null
+    baseRequested.includes('availability') ? checkAvailability(target.url) : null,
+    baseRequested.includes('port') ? checkPort(target) : null,
+    baseRequested.includes('ssl') ? checkSsl(target) : null,
+    baseRequested.includes('dns') ? checkDns(target) : null
   ]);
 
   check.availability = settledValue(baseChecks[0]);
@@ -613,41 +616,82 @@ async function checkPageSpeed(target, apiKey) {
   }
 
   const strategies = ['mobile', 'desktop'];
-  const results = {};
-  for (const strategy of strategies) {
+  const results = Object.fromEntries(
+    await Promise.all(strategies.map(async (strategy) => {
     const endpoint = new URL('https://www.googleapis.com/pagespeedonline/v5/runPagespeed');
     endpoint.searchParams.set('url', target.url);
     endpoint.searchParams.set('strategy', strategy);
+    endpoint.searchParams.set('locale', 'ru');
+    for (const category of ['performance', 'accessibility', 'best-practices', 'seo']) {
+      endpoint.searchParams.append('category', category);
+    }
     endpoint.searchParams.set('key', apiKey);
 
     try {
       const response = await fetch(endpoint, {
         headers: { Accept: 'application/json' },
-        signal: AbortSignal.timeout(35000)
+        signal: AbortSignal.timeout(65000)
       });
       const payload = await response.json().catch(() => ({}));
       const lighthouse = payload.lighthouseResult || {};
       const categories = lighthouse.categories || {};
-      results[strategy] = {
+      const runtimeError = lighthouse.runtimeError || null;
+      const apiError = payload.error || null;
+      const error = runtimeError?.message || apiError?.message || (response.ok ? '' : response.statusText);
+
+      return [strategy, {
         ok: response.ok,
         statusCode: response.status,
         performanceScore: toPercent(categories.performance?.score),
         accessibilityScore: toPercent(categories.accessibility?.score),
         bestPracticesScore: toPercent(categories['best-practices']?.score),
         seoScore: toPercent(categories.seo?.score),
+        metrics: extractLighthouseMetrics(lighthouse.audits || {}),
+        runtimeErrorCode: runtimeError?.code || '',
+        runWarnings: normalizeArray(lighthouse.runWarnings).slice(0, 8),
         finalUrl: lighthouse.finalUrl || '',
-        error: response.ok ? '' : payload.error?.message || response.statusText
-      };
+        error: error ? explainPageSpeedError(error, runtimeError?.code || apiError?.code || '') : ''
+      }];
     } catch (error) {
-      results[strategy] = { ok: false, error: error.message };
+      return [strategy, { ok: false, error: explainPageSpeedError(error.message, error.name || '') }];
     }
-  }
+    }))
+  );
 
   return {
     available: true,
-    ok: Object.values(results).some((item) => item.ok),
-    results
+    ok: Object.values(results).every((item) => item.ok),
+    partial: Object.values(results).some((item) => item.ok),
+    results,
+    note: Object.values(results).some((item) => item.error)
+      ? 'PageSpeed запускает Lighthouse на стороне Google. Если наш HTTP-чек отвечает 200, но PageSpeed пишет timeout, сайт может блокировать Google Lighthouse, headless Chrome, зарубежные IP или слишком долго отдавать документ.'
+      : ''
   };
+}
+
+function extractLighthouseMetrics(audits) {
+  return {
+    firstContentfulPaint: audits['first-contentful-paint']?.displayValue || '',
+    largestContentfulPaint: audits['largest-contentful-paint']?.displayValue || '',
+    speedIndex: audits['speed-index']?.displayValue || '',
+    totalBlockingTime: audits['total-blocking-time']?.displayValue || '',
+    cumulativeLayoutShift: audits['cumulative-layout-shift']?.displayValue || ''
+  };
+}
+
+function explainPageSpeedError(message, code) {
+  const text = String(message || '').trim();
+  const marker = String(code || '').trim();
+  if (/ERR_TIMED_OUT|FAILED_DOCUMENT_REQUEST|PROTOCOL_TIMEOUT|timeout/i.test(`${marker} ${text}`)) {
+    return 'Google Lighthouse не смог надежно загрузить страницу и получил timeout. Проверьте, не блокирует ли сайт Google/PageSpeed, headless Chrome, зарубежные IP, anti-bot/WAF или долгую загрузку главного HTML.';
+  }
+  if (/API key not valid|keyInvalid|PERMISSION_DENIED/i.test(text)) {
+    return 'PageSpeed API key не принят Google. Проверьте ключ и ограничения API в Google Cloud.';
+  }
+  if (/quota|rateLimit|RESOURCE_EXHAUSTED/i.test(`${marker} ${text}`)) {
+    return 'Google PageSpeed ограничил запросы по квоте или rate limit. Повторите позже или проверьте квоты API.';
+  }
+  return text || 'PageSpeed не вернул результат.';
 }
 
 async function fetchHtmlSnapshot(url) {
@@ -772,6 +816,10 @@ function summarizeCheck(check) {
   if (check.seo?.warnings?.length) warnings.push(`SEO: ${check.seo.warnings[0]}`);
   if (check.security?.warnings?.length) warnings.push(`Security: ${check.security.warnings[0]}`);
   if (check.wordpress?.warnings?.length) warnings.push(`WordPress: ${check.wordpress.warnings[0]}`);
+  if (check.pagespeed && check.pagespeed.available && !check.pagespeed.ok) {
+    warnings.push('PageSpeed: Google Lighthouse не смог получить полный отчет');
+  }
+  if (check.pagespeed?.note) warnings.push(check.pagespeed.note);
 
   if (down) {
     return {
