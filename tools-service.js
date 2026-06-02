@@ -8,6 +8,7 @@ const cheerio = require('cheerio');
 const { XMLParser } = require('fast-xml-parser');
 
 const DEFAULT_TIMEOUT_MS = 10000;
+const PAGESPEED_TIMEOUT_MS = Number(process.env.PAGESPEED_TIMEOUT_MS || 28000);
 const MAX_REDIRECTS = 5;
 const MAX_HTML_CHARS = 700000;
 const MAX_PROBE_CHARS = 160000;
@@ -249,6 +250,9 @@ async function runToolsCheck(inputUrl, options = {}) {
     wordpress: null,
     pagespeed: null
   };
+  const pageSpeedPromise = requested.includes('pagespeed')
+    ? checkPageSpeed(target, options.pagespeedApiKey || '')
+    : null;
 
   const baseChecks = await Promise.allSettled([
     baseRequested.includes('availability') ? checkAvailability(target.url) : null,
@@ -269,7 +273,7 @@ async function runToolsCheck(inputUrl, options = {}) {
   if (requested.includes('seo')) check.seo = await checkSeo(target, htmlSnapshot);
   if (requested.includes('security')) check.security = await checkSecurity(target, htmlSnapshot);
   if (requested.includes('wordpress')) check.wordpress = await checkWordPress(target, htmlSnapshot);
-  if (requested.includes('pagespeed')) check.pagespeed = await checkPageSpeed(target, options.pagespeedApiKey || '');
+  if (pageSpeedPromise) check.pagespeed = await pageSpeedPromise;
 
   check.durationMs = Math.round(performance.now() - started);
   check.summary = summarizeCheck(check);
@@ -630,7 +634,7 @@ async function checkPageSpeed(target, apiKey) {
     try {
       const response = await fetch(endpoint, {
         headers: { Accept: 'application/json' },
-        signal: AbortSignal.timeout(65000)
+        signal: AbortSignal.timeout(PAGESPEED_TIMEOUT_MS)
       });
       const payload = await response.json().catch(() => ({}));
       const lighthouse = payload.lighthouseResult || {};
@@ -682,8 +686,8 @@ function extractLighthouseMetrics(audits) {
 function explainPageSpeedError(message, code) {
   const text = String(message || '').trim();
   const marker = String(code || '').trim();
-  if (/ERR_TIMED_OUT|FAILED_DOCUMENT_REQUEST|PROTOCOL_TIMEOUT|timeout/i.test(`${marker} ${text}`)) {
-    return 'Google Lighthouse не смог надежно загрузить страницу и получил timeout. Проверьте, не блокирует ли сайт Google/PageSpeed, headless Chrome, зарубежные IP, anti-bot/WAF или долгую загрузку главного HTML.';
+  if (/ERR_TIMED_OUT|FAILED_DOCUMENT_REQUEST|PROTOCOL_TIMEOUT|AbortError|aborted|timeout/i.test(`${marker} ${text}`)) {
+    return 'Google Lighthouse не успел надежно загрузить страницу за лимит проверки. Проверьте, не блокирует ли сайт Google/PageSpeed, headless Chrome, зарубежные IP, anti-bot/WAF или долгую загрузку главного HTML.';
   }
   if (/API key not valid|keyInvalid|PERMISSION_DENIED/i.test(text)) {
     return 'PageSpeed API key не принят Google. Проверьте ключ и ограничения API в Google Cloud.';
