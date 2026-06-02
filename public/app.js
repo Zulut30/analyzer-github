@@ -1641,7 +1641,10 @@ function renderPageSpeedCard(data) {
 
   const mobile = data.results?.mobile || {};
   const desktop = data.results?.desktop || {};
+  const primary = mobile.ok ? mobile : desktop.ok ? desktop : mobile;
+  const primaryLabel = mobile.ok ? 'Mobile' : desktop.ok ? 'Desktop' : 'Mobile';
   const notes = [
+    data.partial && desktop.ok && !mobile.ok ? 'Mobile Lighthouse не вернул полный отчет, поэтому показываем доступные desktop-баллы.' : '',
     data.note,
     mobile.error ? `Mobile: ${mobile.error}` : '',
     desktop.error ? `Desktop: ${desktop.error}` : '',
@@ -1652,12 +1655,13 @@ function renderPageSpeedCard(data) {
   return renderToolCard('PageSpeed', data.ok ? 'ok' : 'warning', [
     ['Mobile perf', formatScorePercent(mobile.performanceScore)],
     ['Desktop perf', formatScorePercent(desktop.performanceScore)],
-    ['SEO mobile', formatScorePercent(mobile.seoScore)],
-    ['Best practices', formatScorePercent(mobile.bestPracticesScore)],
-    ['Accessibility', formatScorePercent(mobile.accessibilityScore)],
-    ['LCP mobile', mobile.metrics?.largestContentfulPaint || '-'],
-    ['Speed Index', mobile.metrics?.speedIndex || '-'],
-    ['TBT mobile', mobile.metrics?.totalBlockingTime || '-']
+    ['Основной отчет', primaryLabel],
+    ['SEO', formatScorePercent(primary.seoScore)],
+    ['Best practices', formatScorePercent(primary.bestPracticesScore)],
+    ['Accessibility', formatScorePercent(primary.accessibilityScore)],
+    ['LCP', primary.metrics?.largestContentfulPaint || '-'],
+    ['Speed Index', primary.metrics?.speedIndex || '-'],
+    ['TBT', primary.metrics?.totalBlockingTime || '-']
   ], notes);
 }
 

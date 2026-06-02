@@ -911,6 +911,8 @@ function summarizeCheck(check) {
   if (check.wordpress?.warnings?.length) warnings.push(`WordPress: ${check.wordpress.warnings[0]}`);
   if (check.pagespeed?.pending) {
     warnings.push('PageSpeed: отчет выполняется в фоне');
+  } else if (check.pagespeed?.partial) {
+    warnings.push('PageSpeed: частичный отчет готов');
   } else if (check.pagespeed && check.pagespeed.available && !check.pagespeed.ok) {
     warnings.push('PageSpeed: Google Lighthouse не смог получить полный отчет');
   }
