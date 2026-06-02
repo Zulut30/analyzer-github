@@ -2053,7 +2053,8 @@ button {
 
 .history-page,
 .favorites-page,
-.profile-page {
+.profile-page,
+.tools-page {
   width: min(1120px, calc(100vw - 36px));
   margin: 32px auto 58px;
   padding: clamp(22px, 4vw, 36px);
@@ -2185,6 +2186,381 @@ button {
   grid-template-columns: 110px minmax(0, 1fr);
   gap: 18px;
   padding: 14px;
+}
+
+.tools-console,
+.tools-summary,
+.tool-card,
+.tool-history-item,
+.monitor-card,
+.incident-card,
+.monitor-form,
+.tools-empty {
+  border: 1px solid color-mix(in srgb, var(--glass-border) 76%, transparent);
+  border-radius: var(--panel-radius);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--glass-highlight) 18%, transparent), transparent 46%),
+    var(--glass-muted);
+  box-shadow: var(--shadow-soft);
+  -webkit-backdrop-filter: blur(16px) saturate(1.12);
+  backdrop-filter: blur(16px) saturate(1.12);
+}
+
+.tools-console {
+  display: grid;
+  gap: 18px;
+  margin-top: 24px;
+  padding: clamp(16px, 3vw, 24px);
+}
+
+.tools-form {
+  display: grid;
+  gap: 14px;
+}
+
+.tools-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--glass-border) 80%, transparent);
+  border-radius: 999px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--glass-highlight) 16%, transparent), transparent 54%),
+    var(--glass-strong);
+  padding: 8px;
+}
+
+.tools-input-row input {
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  padding: 0 16px;
+  font-size: clamp(17px, 2vw, 21px);
+  outline: none;
+}
+
+.tools-input-row button,
+.monitor-form button,
+.tool-history-item button,
+.monitor-actions button {
+  min-height: 44px;
+  border-radius: 999px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, white 18%, transparent), transparent 46%),
+    linear-gradient(135deg, var(--accent), var(--blue));
+  color: white;
+  padding: 0 18px;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.tools-input-row button:disabled,
+.monitor-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.tools-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.tools-checks label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  border: 1px solid color-mix(in srgb, var(--glass-border) 70%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 44%, transparent);
+  color: var(--muted);
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.tools-checks input {
+  accent-color: var(--accent);
+}
+
+.tools-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tools-tabs button {
+  min-height: 40px;
+  border: 1px solid color-mix(in srgb, var(--glass-border) 70%, transparent);
+  border-radius: 999px;
+  background: var(--glass-muted);
+  color: var(--muted);
+  padding: 0 16px;
+  font-weight: 820;
+}
+
+.tools-tabs button.is-active {
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--border));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, transparent), transparent 54%),
+    var(--glass-strong);
+  color: var(--text);
+}
+
+.tools-status {
+  margin-top: 18px;
+}
+
+.tools-tab-panel {
+  margin-top: 20px;
+}
+
+.tools-empty {
+  padding: clamp(22px, 4vw, 34px);
+  text-align: center;
+}
+
+.tools-empty strong {
+  color: var(--text);
+  font-size: 22px;
+}
+
+.tools-empty p {
+  max-width: 620px;
+  margin: 10px auto 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.tools-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.48fr);
+  gap: 18px;
+  align-items: center;
+  padding: clamp(18px, 3vw, 24px);
+}
+
+.tools-summary h2,
+.tool-history-item h3,
+.monitor-card h3 {
+  margin: 8px 0 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.tools-summary p,
+.tool-card li,
+.tool-history-item p,
+.monitor-card p,
+.incident-card p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.tools-summary-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.tools-summary-metrics div {
+  border: 1px solid color-mix(in srgb, var(--glass-border) 72%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface) 40%, transparent);
+  padding: 12px;
+}
+
+.tools-summary-metrics span,
+.tool-card dt {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.tools-summary-metrics strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--text);
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+
+.tools-result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.tool-card {
+  padding: 18px;
+}
+
+.tool-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tool-card h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 19px;
+}
+
+.tool-card dl {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 0;
+}
+
+.tool-card dl div {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.28fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.tool-card dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--text);
+  font-weight: 760;
+  overflow-wrap: anywhere;
+}
+
+.tool-card ul {
+  display: grid;
+  gap: 6px;
+  margin: 16px 0 0;
+  padding-left: 18px;
+}
+
+.tool-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  border: 1px solid color-mix(in srgb, var(--glass-border) 76%, transparent);
+  border-radius: 999px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.tool-status.is-ok {
+  background: color-mix(in srgb, #27d48f 14%, transparent);
+  color: color-mix(in srgb, #27d48f 78%, var(--text));
+}
+
+.tool-status.is-warning {
+  background: color-mix(in srgb, var(--amber) 16%, transparent);
+  color: color-mix(in srgb, var(--amber) 76%, var(--text));
+}
+
+.tool-status.is-down {
+  background: color-mix(in srgb, var(--coral) 18%, transparent);
+  color: color-mix(in srgb, var(--coral) 86%, var(--text));
+}
+
+.tool-status.is-neutral {
+  background: color-mix(in srgb, var(--blue) 12%, transparent);
+  color: color-mix(in srgb, var(--blue) 78%, var(--text));
+}
+
+.monitor-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px auto;
+  gap: 12px;
+  align-items: end;
+  padding: 16px;
+}
+
+.monitor-form label {
+  display: grid;
+  gap: 8px;
+}
+
+.monitor-form span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 820;
+}
+
+.monitor-form input {
+  min-height: 44px;
+  border: 1px solid color-mix(in srgb, var(--glass-border) 78%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface) 44%, transparent);
+  color: var(--text);
+  padding: 0 12px;
+  outline: none;
+}
+
+.monitors-list,
+.tools-history-list,
+.incidents-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.tool-history-item,
+.monitor-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 16px;
+}
+
+.tool-history-item small,
+.monitor-card small,
+.incident-card small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.monitor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.monitor-actions button:nth-child(n + 2),
+.tool-history-item button {
+  background: var(--glass-muted);
+  color: var(--text);
+}
+
+.incidents-list h2 {
+  margin: 10px 0 0;
+  font-size: 22px;
+}
+
+.incident-card {
+  padding: 14px 16px;
+}
+
+.incident-card.is-open {
+  border-color: color-mix(in srgb, var(--coral) 42%, var(--border));
+}
+
+.incident-card strong {
+  color: var(--text);
+}
+
+.incident-card span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .profile-card {
@@ -2797,6 +3173,14 @@ button {
   .profile-showcase,
   .profile-activity,
   .profile-sync,
+  .tools-console,
+  .tools-summary,
+  .tool-card,
+  .tool-history-item,
+  .monitor-card,
+  .incident-card,
+  .monitor-form,
+  .tools-empty,
   .favorite-card,
   .repo-form,
   .result-actions {
@@ -2828,7 +3212,10 @@ button {
   .result-overview,
   .compare-form,
   .compare-summary,
-  .compare-grid {
+  .compare-grid,
+  .tools-summary,
+  .tools-result-grid,
+  .monitor-form {
     grid-template-columns: 1fr;
   }
 
@@ -2912,7 +3299,7 @@ button {
     grid-column: 1 / -1;
     grid-row: 2;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     justify-content: stretch;
     overflow: visible;
     width: 100%;
@@ -2925,6 +3312,9 @@ button {
     min-width: 0;
     min-height: 36px;
     padding: 0 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .hero-visuals {
@@ -2947,6 +3337,8 @@ button {
   .result-card,
   .compare-page,
   .compare-form,
+  .tools-page,
+  .tools-console,
   .history-page,
   .favorites-page,
   .profile-page,
@@ -3006,6 +3398,42 @@ button {
   .page-heading {
     display: grid;
   }
+
+  .tools-input-row,
+  .tool-history-item,
+  .monitor-card {
+    grid-template-columns: 1fr;
+  }
+
+  .tools-input-row {
+    border-radius: 20px;
+  }
+
+  .tools-input-row input {
+    min-height: 46px;
+  }
+
+  .tools-input-row button,
+  .monitor-form button {
+    width: 100%;
+  }
+
+  .tools-summary-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .tool-card dl div {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .monitor-actions {
+    justify-content: stretch;
+  }
+
+  .monitor-actions button {
+    flex: 1 1 120px;
+  }
 }
 
 @media (max-width: 520px) {
@@ -3013,7 +3441,8 @@ button {
   .history-page,
   .favorites-page,
   .profile-page,
-  .compare-page {
+  .compare-page,
+  .tools-page {
     width: min(100% - 24px, 1260px);
     margin-top: 18px;
   }

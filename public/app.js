@@ -41,6 +41,27 @@ const compareStatus = document.querySelector('#compare-status');
 const compareError = document.querySelector('#compare-error');
 const compareErrorCopy = document.querySelector('#compare-error-copy');
 const compareResults = document.querySelector('#compare-results');
+const toolsForm = document.querySelector('#tools-form');
+const toolsUrlInput = document.querySelector('#tools-url');
+const toolsRunButton = document.querySelector('#tools-run-button');
+const toolsAccessNote = document.querySelector('#tools-access-note');
+const toolsStatus = document.querySelector('#tools-status');
+const toolsStatusTitle = document.querySelector('#tools-status-title');
+const toolsStatusCopy = document.querySelector('#tools-status-copy');
+const toolsError = document.querySelector('#tools-error');
+const toolsErrorCopy = document.querySelector('#tools-error-copy');
+const toolsResult = document.querySelector('#tools-result');
+const toolsTabButtons = document.querySelectorAll('[data-tools-tab]');
+const toolsCheckPanel = document.querySelector('#tools-check-panel');
+const toolsMonitorsPanel = document.querySelector('#tools-monitors-panel');
+const toolsHistoryPanel = document.querySelector('#tools-history-panel');
+const toolsHistoryList = document.querySelector('#tools-history-list');
+const monitorForm = document.querySelector('#monitor-form');
+const monitorUrlInput = document.querySelector('#monitor-url');
+const monitorIntervalInput = document.querySelector('#monitor-interval');
+const monitorCreateButton = document.querySelector('#monitor-create-button');
+const monitorsList = document.querySelector('#monitors-list');
+const incidentsList = document.querySelector('#incidents-list');
 const heroRepoImage = document.querySelector('#hero-repo-image');
 const heroLanguageImages = document.querySelectorAll('[data-hero-language]');
 
@@ -59,6 +80,14 @@ let profileStateTimer = null;
 let progressTimer = null;
 let progressStepIndex = 0;
 let currentShareId = '';
+let toolsState = {
+  activeTab: 'check',
+  history: [],
+  monitors: [],
+  incidents: [],
+  lastCheck: null,
+  loaded: false
+};
 
 const themes = [
   { id: 'light', label: 'Светлая' },
@@ -359,6 +388,20 @@ compareForm?.addEventListener('submit', (event) => {
   compareRepositories(compareRepoA?.value || '', compareRepoB?.value || '');
 });
 
+toolsForm?.addEventListener('submit', (event) => {
+  event.preventDefault();
+  runToolsCheck();
+});
+
+toolsTabButtons.forEach((tabButton) => {
+  tabButton.addEventListener('click', () => setToolsTab(tabButton.dataset.toolsTab || 'check'));
+});
+
+monitorForm?.addEventListener('submit', (event) => {
+  event.preventDefault();
+  createToolMonitor();
+});
+
 document.querySelectorAll('[data-export-format]').forEach((exportButton) => {
   exportButton.addEventListener('click', () => exportAnalysis(exportButton.dataset.exportFormat));
 });
@@ -394,10 +437,11 @@ function syncRoute() {
   const path = window.location.pathname;
   const isShareRoute = path.startsWith('/share/');
   const activeRoute =
-    path === '/history' || path === '/favorites' || path === '/profile' || path === '/compare' ? path : '/';
+    path === '/history' || path === '/favorites' || path === '/profile' || path === '/compare' || path === '/tools' ? path : '/';
 
   document.querySelector('#analysis-view').hidden = activeRoute !== '/';
   document.querySelector('#compare-view').hidden = activeRoute !== '/compare';
+  document.querySelector('#tools-view').hidden = activeRoute !== '/tools';
   document.querySelector('#history-view').hidden = activeRoute !== '/history';
   document.querySelector('#favorites-view').hidden = activeRoute !== '/favorites';
   document.querySelector('#profile-view').hidden = activeRoute !== '/profile';
@@ -410,6 +454,10 @@ function syncRoute() {
   if (activeRoute === '/history') renderHistoryPage();
   if (activeRoute === '/favorites') renderFavoritesPage();
   if (activeRoute === '/profile') renderProfile();
+  if (activeRoute === '/tools') {
+    renderTools();
+    loadToolsData();
+  }
   if (isShareRoute) loadSharedAnalysis(path.split('/').filter(Boolean)[1] || '');
   if (!isShareRoute) currentShareId = '';
 }
@@ -495,6 +543,7 @@ function renderSignedInProfileMenu(user) {
     </div>
     <p class="profile-menu-note">${escapeHtml(roleText)}</p>
     <div class="profile-menu-links">
+      <a href="/tools" data-route="/tools">Инструменты</a>
       <a href="/profile" data-route="/profile">Профиль</a>
       <a href="/history" data-route="/history">История</a>
       <a href="/favorites" data-route="/favorites">Избранное</a>
@@ -552,12 +601,26 @@ function updateAnalyzeAccessUI() {
   const allowed = canUseAnalyzer();
   button.disabled = !allowed;
   input.disabled = false;
+  updateToolsAccessUI(allowed);
 
   if (!accessNote) return;
   accessNote.classList.toggle('is-allowed', allowed);
   accessNote.textContent = allowed
     ? `Доступ открыт для @${authState.user?.login || authState.allowedLogin}.`
     : accessDeniedMessage();
+}
+
+function updateToolsAccessUI(allowed = canUseAnalyzer()) {
+  if (toolsRunButton) toolsRunButton.disabled = !allowed;
+  if (monitorCreateButton) monitorCreateButton.disabled = !allowed;
+  if (toolsUrlInput) toolsUrlInput.disabled = false;
+  if (monitorUrlInput) monitorUrlInput.disabled = false;
+  if (toolsAccessNote) {
+    toolsAccessNote.classList.toggle('is-allowed', allowed);
+    toolsAccessNote.textContent = allowed
+      ? 'Инструменты готовы. Проверки сайтов не используют AI-токены.'
+      : accessDeniedMessage();
+  }
 }
 
 function showError(message) {
@@ -1167,6 +1230,498 @@ function renderFavoritesPage() {
       showToast('Удалено из избранного');
     });
   });
+}
+
+function setToolsTab(tab) {
+  toolsState.activeTab = ['check', 'monitors', 'history'].includes(tab) ? tab : 'check';
+  toolsTabButtons.forEach((buttonElement) => {
+    const active = buttonElement.dataset.toolsTab === toolsState.activeTab;
+    buttonElement.classList.toggle('is-active', active);
+    buttonElement.setAttribute('aria-selected', String(active));
+  });
+  if (toolsCheckPanel) toolsCheckPanel.hidden = toolsState.activeTab !== 'check';
+  if (toolsMonitorsPanel) toolsMonitorsPanel.hidden = toolsState.activeTab !== 'monitors';
+  if (toolsHistoryPanel) toolsHistoryPanel.hidden = toolsState.activeTab !== 'history';
+  renderTools();
+  if (toolsState.activeTab !== 'check') loadToolsData();
+}
+
+async function loadToolsData(force = false) {
+  if (!canUseAnalyzer()) {
+    toolsState = { ...toolsState, history: [], monitors: [], incidents: [], loaded: false };
+    renderTools();
+    return;
+  }
+
+  if (toolsState.loaded && !force) return;
+
+  try {
+    const [historyResponse, monitorsResponse] = await Promise.all([
+      fetch('/api/tools/history', { headers: { Accept: 'application/json' } }),
+      fetch('/api/tools/monitors', { headers: { Accept: 'application/json' } })
+    ]);
+    const historyPayload = await readApiResponse(historyResponse);
+    const monitorsPayload = await readApiResponse(monitorsResponse);
+
+    if (!historyResponse.ok || !historyPayload.ok) throw new Error(historyPayload.error || 'Не удалось загрузить историю инструментов');
+    if (!monitorsResponse.ok || !monitorsPayload.ok) throw new Error(monitorsPayload.error || 'Не удалось загрузить мониторы');
+
+    toolsState.history = normalizeArray(historyPayload.checks);
+    toolsState.monitors = normalizeArray(monitorsPayload.monitors);
+    toolsState.incidents = normalizeArray(monitorsPayload.incidents);
+    toolsState.loaded = true;
+    renderTools();
+  } catch (error) {
+    showToolsError(error.message);
+  }
+}
+
+async function runToolsCheck() {
+  const url = String(toolsUrlInput?.value || '').trim();
+  if (!url) return;
+  if (!canUseAnalyzer()) {
+    showToolsError(accessDeniedMessage());
+    navigate('/profile');
+    return;
+  }
+
+  const checks = getSelectedToolChecks();
+  if (!checks.length) {
+    showToolsError('Выберите хотя бы одну проверку.');
+    return;
+  }
+
+  setToolsTab('check');
+  setToolsLoading(true, 'Проверяю сайт', 'Доступность, SSL, DNS и HTML-аудит выполняются без AI-запросов.');
+  hideToolsError();
+
+  try {
+    const response = await fetch('/api/tools/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, checks })
+    });
+    const payload = await readApiResponse(response);
+    if (!response.ok || !payload.ok) throw new Error(payload.error || 'Не удалось выполнить проверку сайта');
+
+    toolsState.lastCheck = payload.check;
+    toolsState.history = [payload.check, ...toolsState.history.filter((item) => item.id !== payload.check.id)].slice(0, 220);
+    toolsState.loaded = false;
+    renderTools();
+    showToast('Проверка сайта готова');
+  } catch (error) {
+    showToolsError(error.message);
+  } finally {
+    setToolsLoading(false);
+  }
+}
+
+async function createToolMonitor() {
+  const url = String(monitorUrlInput?.value || '').trim();
+  const intervalMinutes = Number(monitorIntervalInput?.value || 5);
+  if (!url) return;
+  if (!canUseAnalyzer()) {
+    showToolsError(accessDeniedMessage());
+    navigate('/profile');
+    return;
+  }
+
+  setToolsLoading(true, 'Создаю монитор', 'Сохраняю URL и расписание легкой uptime-проверки.');
+  hideToolsError();
+
+  try {
+    const response = await fetch('/api/tools/monitors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, intervalMinutes })
+    });
+    const payload = await readApiResponse(response);
+    if (!response.ok || !payload.ok) throw new Error(payload.error || 'Не удалось создать монитор');
+
+    monitorUrlInput.value = '';
+    toolsState.loaded = false;
+    await loadToolsData(true);
+    setToolsTab('monitors');
+    showToast('Монитор создан');
+  } catch (error) {
+    showToolsError(error.message);
+  } finally {
+    setToolsLoading(false);
+  }
+}
+
+async function runToolMonitor(monitorId) {
+  if (!monitorId) return;
+  setToolsLoading(true, 'Проверяю монитор', 'Запускаю быстрый uptime-прогон: доступность, порт и SSL.');
+  hideToolsError();
+
+  try {
+    const response = await fetch(`/api/tools/monitors/${encodeURIComponent(monitorId)}/run`, {
+      method: 'POST',
+      headers: { Accept: 'application/json' }
+    });
+    const payload = await readApiResponse(response);
+    if (!response.ok || !payload.ok) throw new Error(payload.error || 'Не удалось запустить монитор');
+
+    toolsState.lastCheck = payload.check;
+    toolsState.loaded = false;
+    await loadToolsData(true);
+    renderTools();
+    showToast('Монитор проверен');
+  } catch (error) {
+    showToolsError(error.message);
+  } finally {
+    setToolsLoading(false);
+  }
+}
+
+async function toggleToolMonitor(monitorId, active) {
+  if (!monitorId) return;
+
+  try {
+    const response = await fetch(`/api/tools/monitors/${encodeURIComponent(monitorId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active })
+    });
+    const payload = await readApiResponse(response);
+    if (!response.ok || !payload.ok) throw new Error(payload.error || 'Не удалось обновить монитор');
+
+    toolsState.loaded = false;
+    await loadToolsData(true);
+    showToast(active ? 'Монитор включен' : 'Монитор остановлен');
+  } catch (error) {
+    showToolsError(error.message);
+  }
+}
+
+async function deleteToolMonitor(monitorId) {
+  if (!monitorId) return;
+
+  try {
+    const response = await fetch(`/api/tools/monitors/${encodeURIComponent(monitorId)}`, {
+      method: 'DELETE',
+      headers: { Accept: 'application/json' }
+    });
+    const payload = await readApiResponse(response);
+    if (!response.ok || !payload.ok) throw new Error(payload.error || 'Не удалось удалить монитор');
+
+    toolsState.loaded = false;
+    await loadToolsData(true);
+    showToast('Монитор удален');
+  } catch (error) {
+    showToolsError(error.message);
+  }
+}
+
+function getSelectedToolChecks() {
+  return [...document.querySelectorAll('input[name="tool-check"]:checked')]
+    .map((inputElement) => inputElement.value)
+    .filter(Boolean);
+}
+
+function setToolsLoading(isLoading, title = 'Проверяю сайт', copy = 'Запускаю сетевые проверки без AI-запросов.') {
+  if (toolsRunButton) toolsRunButton.disabled = isLoading || !canUseAnalyzer();
+  if (monitorCreateButton) monitorCreateButton.disabled = isLoading || !canUseAnalyzer();
+  if (toolsStatus) toolsStatus.hidden = !isLoading;
+  if (toolsStatusTitle) toolsStatusTitle.textContent = title;
+  if (toolsStatusCopy) toolsStatusCopy.textContent = copy;
+}
+
+function showToolsError(message) {
+  if (!toolsError || !toolsErrorCopy) return;
+  toolsErrorCopy.textContent = message;
+  toolsError.hidden = false;
+}
+
+function hideToolsError() {
+  if (!toolsError || !toolsErrorCopy) return;
+  toolsError.hidden = true;
+  toolsErrorCopy.textContent = '';
+}
+
+function renderTools() {
+  updateToolsAccessUI();
+  renderToolsResult();
+  renderToolsHistory();
+  renderToolMonitors();
+}
+
+function renderToolsResult() {
+  if (!toolsResult) return;
+  const check = toolsState.lastCheck;
+
+  if (!check) {
+    toolsResult.innerHTML = `
+      <div class="tools-empty">
+        <strong>Проверка сайта появится здесь</strong>
+        <p>Введите публичный URL, выберите нужные модули и запустите аудит. Grok не вызывается, AI-токены остаются на нуле.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const summary = check.summary || {};
+  toolsResult.innerHTML = `
+    <div class="tools-summary">
+      <div>
+        <span class="tool-status ${toolStatusClass(summary.status)}">${escapeHtml(toolStatusLabel(summary.status))}</span>
+        <h2>${escapeHtml(check.hostname || check.url)}</h2>
+        <p>${escapeHtml(summary.label || 'Проверка выполнена')}</p>
+      </div>
+      <div class="tools-summary-metrics">
+        ${renderToolMetric('HTTP', summary.statusCode || '-')}
+        ${renderToolMetric('Время', summary.responseTimeMs ? `${summary.responseTimeMs} мс` : '-')}
+        ${renderToolMetric('Длительность', check.durationMs ? `${check.durationMs} мс` : '-')}
+        ${renderToolMetric('AI токены', '0')}
+      </div>
+    </div>
+    <div class="tools-result-grid">
+      ${renderAvailabilityCard(check.availability)}
+      ${renderPortCard(check.port)}
+      ${renderSslCard(check.ssl)}
+      ${renderDnsCard(check.dns)}
+      ${renderSeoCard(check.seo)}
+      ${renderSecurityCard(check.security)}
+      ${renderWordPressCard(check.wordpress)}
+      ${renderPageSpeedCard(check.pagespeed)}
+    </div>
+  `;
+}
+
+function renderAvailabilityCard(data) {
+  if (!data) return '';
+  return renderToolCard('Доступность', data.error ? 'down' : data.reachable ? 'ok' : 'warning', [
+    ['Статус', data.statusCode || data.error || '-'],
+    ['Ответ', data.responseTimeMs ? `${data.responseTimeMs} мс` : '-'],
+    ['Редиректы', data.redirectCount ?? 0],
+    ['Финальный URL', data.finalUrl || '-']
+  ], data.redirects?.length ? data.redirects.map((item) => `${item.statusCode}: ${item.from} -> ${item.to}`).slice(0, 4) : []);
+}
+
+function renderPortCard(data) {
+  if (!data) return '';
+  return renderToolCard('Порт', data.open ? 'ok' : 'down', [
+    ['Порт', data.port || '-'],
+    ['Протокол', data.protocol || '-'],
+    ['Ответ', data.responseTimeMs ? `${data.responseTimeMs} мс` : '-'],
+    ['Ошибка', data.error || '-']
+  ]);
+}
+
+function renderSslCard(data) {
+  if (!data) return '';
+  const status = data.ok ? (Number(data.daysLeft) < 14 ? 'warning' : 'ok') : 'warning';
+  return renderToolCard('SSL', status, [
+    ['Авторизация', data.authorized ? 'да' : data.available === false ? 'нет HTTPS' : 'нет'],
+    ['До окончания', data.daysLeft ?? '-'],
+    ['Issuer', data.issuer || '-'],
+    ['SAN', normalizeArray(data.san).slice(0, 3).join(', ') || '-']
+  ], [data.warning, data.authorizationError, data.error].filter(Boolean));
+}
+
+function renderDnsCard(data) {
+  if (!data) return '';
+  const records = data.records || {};
+  const lines = [
+    ['A', summarizeDnsValues(records.A)],
+    ['AAAA', summarizeDnsValues(records.AAAA)],
+    ['NS', summarizeDnsValues(records.NS)],
+    ['MX', summarizeDnsValues(records.MX)],
+    ['TXT', normalizeArray(records.TXT).length],
+    ['CAA', normalizeArray(records.CAA).length]
+  ];
+  return renderToolCard('DNS', data.ok ? 'ok' : 'warning', [['Latency', data.latencyMs ? `${data.latencyMs} мс` : '-'], ...lines]);
+}
+
+function renderSeoCard(data) {
+  if (!data) return '';
+  return renderToolCard('SEO', data.ok ? 'ok' : 'warning', [
+    ['Title', data.title || '-'],
+    ['Description', data.description ? truncateText(data.description, 90) : '-'],
+    ['H1', normalizeArray(data.h1).length],
+    ['Indexable', data.indexable ? 'да' : 'нет'],
+    ['Sitemap', data.sitemap?.found ? `${data.sitemap.urlCount || data.sitemap.sitemapCount || 0} URL` : 'не найден']
+  ], data.error ? [data.error] : normalizeArray(data.warnings));
+}
+
+function renderSecurityCard(data) {
+  if (!data) return '';
+  return renderToolCard('Security', data.ok ? 'ok' : 'warning', [
+    ['Нет headers', normalizeArray(data.missingHeaders).length],
+    ['Mixed content', normalizeArray(data.mixedContent).length],
+    ['Exposed paths', normalizeArray(data.exposed).length],
+    ['Directory listing', data.directoryListing ? 'да' : 'нет']
+  ], data.error ? [data.error] : normalizeArray(data.warnings));
+}
+
+function renderWordPressCard(data) {
+  if (!data) return '';
+  return renderToolCard('WordPress', data.detected ? 'ok' : 'neutral', [
+    ['Обнаружен', data.detected ? 'да' : 'нет'],
+    ['Темы', normalizeArray(data.themeCandidates).slice(0, 3).join(', ') || '-'],
+    ['Плагины', normalizeArray(data.pluginCandidates).slice(0, 4).join(', ') || '-'],
+    ['REST API', data.endpoints?.['/wp-json/'] || '-']
+  ], data.error ? [data.error] : normalizeArray(data.warnings));
+}
+
+function renderPageSpeedCard(data) {
+  if (!data) return '';
+  if (!data.available) {
+    return renderToolCard('PageSpeed', 'neutral', [['Статус', 'API key не настроен']], [data.message]);
+  }
+
+  const mobile = data.results?.mobile || {};
+  const desktop = data.results?.desktop || {};
+  return renderToolCard('PageSpeed', data.ok ? 'ok' : 'warning', [
+    ['Mobile', mobile.performanceScore ?? mobile.error ?? '-'],
+    ['Desktop', desktop.performanceScore ?? desktop.error ?? '-'],
+    ['SEO mobile', mobile.seoScore ?? '-'],
+    ['Best practices', mobile.bestPracticesScore ?? '-']
+  ]);
+}
+
+function renderToolCard(title, status, metrics, notes = []) {
+  return `
+    <article class="tool-card">
+      <div class="tool-card-top">
+        <h3>${escapeHtml(title)}</h3>
+        <span class="tool-status ${toolStatusClass(status)}">${escapeHtml(toolStatusLabel(status))}</span>
+      </div>
+      <dl>
+        ${metrics
+          .map(([label, value]) => `
+            <div>
+              <dt>${escapeHtml(label)}</dt>
+              <dd>${escapeHtml(String(value ?? '-'))}</dd>
+            </div>
+          `)
+          .join('')}
+      </dl>
+      ${normalizeArray(notes).length ? `<ul>${normalizeArray(notes).slice(0, 6).map((note) => `<li>${escapeHtml(note)}</li>`).join('')}</ul>` : ''}
+    </article>
+  `;
+}
+
+function renderToolMetric(label, value) {
+  return `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>`;
+}
+
+function renderToolsHistory() {
+  if (!toolsHistoryList) return;
+  const items = normalizeArray(toolsState.history);
+
+  if (!items.length) {
+    toolsHistoryList.innerHTML = '<div class="history-empty">История проверок пока пустая.</div>';
+    return;
+  }
+
+  toolsHistoryList.innerHTML = items
+    .slice(0, 80)
+    .map((item, index) => `
+      <article class="tool-history-item">
+        <div>
+          <span class="tool-status ${toolStatusClass(item.summary?.status)}">${escapeHtml(toolStatusLabel(item.summary?.status))}</span>
+          <h3>${escapeHtml(item.hostname || item.url)}</h3>
+          <p>${escapeHtml(item.summary?.label || 'Проверка выполнена')}</p>
+          <small>${escapeHtml(formatDate(item.checkedAt))} · ${escapeHtml(item.mode || 'manual')} · AI токены: 0</small>
+        </div>
+        <button type="button" data-show-tool-history="${index}">Открыть</button>
+      </article>
+    `)
+    .join('');
+
+  toolsHistoryList.querySelectorAll('[data-show-tool-history]').forEach((buttonElement) => {
+    buttonElement.addEventListener('click', () => {
+      const check = items[Number(buttonElement.dataset.showToolHistory)];
+      if (!check) return;
+      toolsState.lastCheck = check;
+      setToolsTab('check');
+      renderTools();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+}
+
+function renderToolMonitors() {
+  if (!monitorsList || !incidentsList) return;
+  const monitors = normalizeArray(toolsState.monitors);
+  const incidents = normalizeArray(toolsState.incidents);
+
+  if (!monitors.length) {
+    monitorsList.innerHTML = '<div class="history-empty">Мониторов пока нет. Создайте первый, чтобы сайт проверялся по расписанию.</div>';
+  } else {
+    monitorsList.innerHTML = monitors
+      .map((monitor) => `
+        <article class="monitor-card">
+          <div>
+            <span class="tool-status ${toolStatusClass(monitor.lastStatus)}">${escapeHtml(toolStatusLabel(monitor.lastStatus))}</span>
+            <h3>${escapeHtml(monitor.hostname || monitor.url)}</h3>
+            <p>${escapeHtml(monitor.lastSummary || 'Ожидает проверки')}</p>
+            <small>Каждые ${escapeHtml(String(monitor.intervalMinutes || 5))} мин · последняя: ${escapeHtml(monitor.lastCheckedAt ? formatDate(monitor.lastCheckedAt) : 'нет')}</small>
+          </div>
+          <div class="monitor-actions">
+            <button type="button" data-run-monitor="${escapeAttr(monitor.id)}">Проверить</button>
+            <button type="button" data-toggle-monitor="${escapeAttr(monitor.id)}" data-active="${monitor.active ? '0' : '1'}">${monitor.active ? 'Пауза' : 'Включить'}</button>
+            <button type="button" data-delete-monitor="${escapeAttr(monitor.id)}">Удалить</button>
+          </div>
+        </article>
+      `)
+      .join('');
+  }
+
+  incidentsList.innerHTML = `
+    <h2>Инциденты</h2>
+    ${
+      incidents.length
+        ? incidents
+            .slice(0, 30)
+            .map((incident) => `
+              <article class="incident-card ${incident.status === 'open' ? 'is-open' : ''}">
+                <div>
+                  <strong>${escapeHtml(incident.status === 'open' ? 'Открыт' : 'Закрыт')}</strong>
+                  <span>${escapeHtml(incident.url || '')}</span>
+                  <p>${escapeHtml(incident.message || incident.recoveryMessage || '')}</p>
+                  <small>${escapeHtml(formatDate(incident.openedAt))}${incident.closedAt ? ` -> ${escapeHtml(formatDate(incident.closedAt))}` : ''}</small>
+                </div>
+              </article>
+            `)
+            .join('')
+        : '<div class="history-empty">Инцидентов нет.</div>'
+    }
+  `;
+
+  monitorsList.querySelectorAll('[data-run-monitor]').forEach((buttonElement) => {
+    buttonElement.addEventListener('click', () => runToolMonitor(buttonElement.dataset.runMonitor));
+  });
+  monitorsList.querySelectorAll('[data-toggle-monitor]').forEach((buttonElement) => {
+    buttonElement.addEventListener('click', () => toggleToolMonitor(buttonElement.dataset.toggleMonitor, buttonElement.dataset.active === '1'));
+  });
+  monitorsList.querySelectorAll('[data-delete-monitor]').forEach((buttonElement) => {
+    buttonElement.addEventListener('click', () => deleteToolMonitor(buttonElement.dataset.deleteMonitor));
+  });
+}
+
+function summarizeDnsValues(values) {
+  const items = normalizeArray(values);
+  if (!items.length) return '-';
+  if (typeof items[0] === 'object') return items.map((item) => item.address || item.exchange || item.value || JSON.stringify(item)).slice(0, 3).join(', ');
+  return items.slice(0, 3).join(', ');
+}
+
+function toolStatusClass(status) {
+  if (status === 'ok') return 'is-ok';
+  if (status === 'down') return 'is-down';
+  if (status === 'warning') return 'is-warning';
+  return 'is-neutral';
+}
+
+function toolStatusLabel(status) {
+  if (status === 'ok') return 'OK';
+  if (status === 'down') return 'Down';
+  if (status === 'warning') return 'Warning';
+  if (status === 'pending') return 'Pending';
+  return 'Info';
 }
 
 async function compareRepositories(repoA, repoB) {

@@ -11,6 +11,7 @@ const {
   Paragraph,
   TextRun
 } = require('docx');
+const { createToolsService } = require('./tools-service');
 require('dotenv').config();
 
 const app = express();
@@ -46,6 +47,10 @@ const SESSION_FILE = path.join(DATA_DIR, 'sessions.json');
 const SHARED_ANALYSES_FILE = path.join(DATA_DIR, 'shared-analyses.json');
 const SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 14;
 const sessions = loadSessionStore();
+const toolsService = createToolsService({
+  dataDir: DATA_DIR,
+  pagespeedApiKey: process.env.GOOGLE_PAGESPEED_API_KEY || ''
+});
 
 app.use(compression({ threshold: 1024 }));
 app.use(express.json({ limit: '5mb' }));
@@ -451,6 +456,111 @@ app.post('/api/compare', async (req, res) => {
   }
 });
 
+app.post('/api/tools/run', async (req, res) => {
+  try {
+    const session = requireAllowedProfileSession(req, res);
+    if (!session) return;
+
+    const check = await toolsService.runManualCheck(session.user.login, req.body?.url, req.body?.checks);
+    res.json({ ok: true, check });
+  } catch (error) {
+    res.status(error.status || 500).json({
+      ok: false,
+      error: error.publicMessage || error.message || 'Не удалось выполнить проверку сайта'
+    });
+  }
+});
+
+app.get('/api/tools/history', async (req, res) => {
+  try {
+    const session = requireAllowedProfileSession(req, res);
+    if (!session) return;
+
+    const checks = await toolsService.getHistory(session.user.login);
+    res.json({ ok: true, checks });
+  } catch (error) {
+    res.status(error.status || 500).json({
+      ok: false,
+      error: error.publicMessage || error.message || 'Не удалось загрузить историю инструментов'
+    });
+  }
+});
+
+app.get('/api/tools/monitors', async (req, res) => {
+  try {
+    const session = requireAllowedProfileSession(req, res);
+    if (!session) return;
+
+    const payload = await toolsService.getMonitors(session.user.login);
+    res.json({ ok: true, ...payload });
+  } catch (error) {
+    res.status(error.status || 500).json({
+      ok: false,
+      error: error.publicMessage || error.message || 'Не удалось загрузить мониторы'
+    });
+  }
+});
+
+app.post('/api/tools/monitors', async (req, res) => {
+  try {
+    const session = requireAllowedProfileSession(req, res);
+    if (!session) return;
+
+    const monitor = await toolsService.createMonitor(session.user.login, req.body || {});
+    res.json({ ok: true, monitor });
+  } catch (error) {
+    res.status(error.status || 500).json({
+      ok: false,
+      error: error.publicMessage || error.message || 'Не удалось создать монитор'
+    });
+  }
+});
+
+app.patch('/api/tools/monitors/:id', async (req, res) => {
+  try {
+    const session = requireAllowedProfileSession(req, res);
+    if (!session) return;
+
+    const monitor = await toolsService.updateMonitor(session.user.login, String(req.params.id || ''), req.body || {});
+    res.json({ ok: true, monitor });
+  } catch (error) {
+    res.status(error.status || 500).json({
+      ok: false,
+      error: error.publicMessage || error.message || 'Не удалось обновить монитор'
+    });
+  }
+});
+
+app.delete('/api/tools/monitors/:id', async (req, res) => {
+  try {
+    const session = requireAllowedProfileSession(req, res);
+    if (!session) return;
+
+    const result = await toolsService.deleteMonitor(session.user.login, String(req.params.id || ''));
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    res.status(error.status || 500).json({
+      ok: false,
+      error: error.publicMessage || error.message || 'Не удалось удалить монитор'
+    });
+  }
+});
+
+app.post('/api/tools/monitors/:id/run', async (req, res) => {
+  try {
+    const session = requireAllowedProfileSession(req, res);
+    if (!session) return;
+
+    const result = await toolsService.runMonitor(session.user.login, String(req.params.id || ''));
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    res.status(error.status || 500).json({
+      ok: false,
+      error: error.publicMessage || error.message || 'Не удалось запустить монитор'
+    });
+  }
+});
+
 app.post('/api/export', async (req, res) => {
   try {
     const format = String(req.body?.format || '').toLowerCase();
@@ -498,6 +608,7 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
+  toolsService.startScheduler();
   console.log(`GitHub analyzer is running on http://0.0.0.0:${PORT}`);
 });
 

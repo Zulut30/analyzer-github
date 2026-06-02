@@ -8,7 +8,7 @@
     <link rel="icon" href="/favicon.ico?v=33" sizes="any" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=33" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=33" />
-    <link rel="stylesheet" href="/styles.css?v=33" />
+    <link rel="stylesheet" href="/styles.css?v=34" />
   </head>
   <body>
     <div class="app-shell">
@@ -24,6 +24,7 @@
         <nav class="main-nav" aria-label="Основная навигация">
           <a href="/" data-route="/">Анализ</a>
           <a href="/compare" data-route="/compare">Сравнение</a>
+          <a href="/tools" data-route="/tools">Инструменты</a>
           <a href="/history" data-route="/history">История</a>
           <a href="/favorites" data-route="/favorites">Избранное</a>
         </nav>
@@ -271,6 +272,80 @@
           </div>
         </section>
 
+        <section id="tools-view" class="route-view" hidden>
+          <div class="tools-page">
+            <div class="page-heading tools-heading">
+              <div>
+                <h1>Инструменты сайта</h1>
+                <p>Проверяйте доступность, SSL, DNS, SEO, безопасность и WordPress без расхода AI-токенов.</p>
+              </div>
+            </div>
+
+            <section class="tools-console" aria-label="Инструменты проверки сайта">
+              <form id="tools-form" class="tools-form">
+                <label class="sr-only" for="tools-url">URL сайта</label>
+                <div class="tools-input-row">
+                  <input id="tools-url" type="url" placeholder="https://example.com" autocomplete="url" required />
+                  <button id="tools-run-button" type="submit">Проверить</button>
+                </div>
+                <div class="tools-checks" aria-label="Типы проверок">
+                  <label><input type="checkbox" name="tool-check" value="availability" checked />Доступность</label>
+                  <label><input type="checkbox" name="tool-check" value="ssl" checked />SSL</label>
+                  <label><input type="checkbox" name="tool-check" value="dns" checked />DNS</label>
+                  <label><input type="checkbox" name="tool-check" value="seo" checked />SEO</label>
+                  <label><input type="checkbox" name="tool-check" value="security" checked />Security</label>
+                  <label><input type="checkbox" name="tool-check" value="wordpress" checked />WordPress</label>
+                  <label><input type="checkbox" name="tool-check" value="pagespeed" />PageSpeed</label>
+                </div>
+              </form>
+
+              <div class="tools-tabs" role="tablist" aria-label="Разделы инструментов">
+                <button type="button" class="is-active" data-tools-tab="check">Проверка</button>
+                <button type="button" data-tools-tab="monitors">Мониторы</button>
+                <button type="button" data-tools-tab="history">История</button>
+              </div>
+              <p id="tools-access-note" class="access-note" aria-live="polite"></p>
+            </section>
+
+            <section class="status-panel tools-status" id="tools-status" hidden aria-live="polite">
+              <div class="loader" aria-hidden="true"></div>
+              <div>
+                <strong id="tools-status-title">Проверяю сайт</strong>
+                <p id="tools-status-copy">Запускаю сетевые проверки без AI-запросов.</p>
+              </div>
+            </section>
+
+            <section class="error-panel" id="tools-error" hidden>
+              <strong>Не удалось выполнить проверку</strong>
+              <p id="tools-error-copy"></p>
+            </section>
+
+            <section id="tools-check-panel" class="tools-tab-panel">
+              <div id="tools-result" class="tools-result"></div>
+            </section>
+
+            <section id="tools-monitors-panel" class="tools-tab-panel" hidden>
+              <form id="monitor-form" class="monitor-form">
+                <label>
+                  <span>URL для мониторинга</span>
+                  <input id="monitor-url" type="url" placeholder="https://example.com" required />
+                </label>
+                <label>
+                  <span>Интервал, минут</span>
+                  <input id="monitor-interval" type="number" min="1" max="1440" value="5" />
+                </label>
+                <button id="monitor-create-button" type="submit">Создать монитор</button>
+              </form>
+              <div id="monitors-list" class="monitors-list"></div>
+              <div id="incidents-list" class="incidents-list"></div>
+            </section>
+
+            <section id="tools-history-panel" class="tools-tab-panel" hidden>
+              <div id="tools-history-list" class="tools-history-list"></div>
+            </section>
+          </div>
+        </section>
+
         <section id="history-view" class="route-view" hidden>
           <div class="history-page">
             <div class="page-heading">
@@ -319,6 +394,6 @@
       <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
     </div>
 
-    <script src="/app.js?v=33"></script>
+    <script src="/app.js?v=34"></script>
   </body>
 </html>
