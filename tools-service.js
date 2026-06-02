@@ -8,7 +8,8 @@ const cheerio = require('cheerio');
 const { XMLParser } = require('fast-xml-parser');
 
 const DEFAULT_TIMEOUT_MS = 10000;
-const PAGESPEED_TIMEOUT_MS = Number(process.env.PAGESPEED_TIMEOUT_MS || 28000);
+const PAGESPEED_TIMEOUT_MS = Number(process.env.PAGESPEED_TIMEOUT_MS || 90000);
+const PAGESPEED_JOB_TIMEOUT_MS = Number(process.env.PAGESPEED_JOB_TIMEOUT_MS || 180000);
 const MAX_REDIRECTS = 5;
 const MAX_HTML_CHARS = 700000;
 const MAX_PROBE_CHARS = 160000;
@@ -25,9 +26,12 @@ function createToolsService({ dataDir, pagespeedApiKey = '', logger = console } 
   let schedulerRunning = false;
 
   async function runManualCheck(login, inputUrl, requestedChecks = []) {
+    const normalizedChecks = normalizeRequestedChecks(requestedChecks);
+    const shouldDeferPageSpeed = normalizedChecks.includes('pagespeed') && Boolean(pagespeedApiKey);
     const check = await runToolsCheck(inputUrl, {
       mode: 'manual',
-      requestedChecks,
+      requestedChecks: normalizedChecks,
+      deferPageSpeed: shouldDeferPageSpeed,
       pagespeedApiKey
     });
 
@@ -37,6 +41,19 @@ function createToolsService({ dataDir, pagespeedApiKey = '', logger = console } 
       return check;
     });
 
+    if (shouldDeferPageSpeed) {
+      startPageSpeedJob(login, check.id, check.url).catch((error) => {
+        logger.warn?.('PageSpeed background job failed:', error.message);
+      });
+    }
+
+    return check;
+  }
+
+  async function getCheck(login, checkId) {
+    const store = await readState();
+    const check = normalizeArray(getUserState(store, login).checks).find((item) => item.id === checkId);
+    if (!check) throw publicError('Check not found', 404);
     return check;
   }
 
@@ -180,6 +197,52 @@ function createToolsService({ dataDir, pagespeedApiKey = '', logger = console } 
     return monitor;
   }
 
+  async function startPageSpeedJob(login, checkId, url) {
+    await mutateState((store) => {
+      const check = normalizeArray(getUserState(store, login).checks).find((item) => item.id === checkId);
+      if (check?.pagespeed?.pending) {
+        check.pagespeed.startedAt = check.pagespeed.startedAt || new Date().toISOString();
+      }
+      return check || null;
+    });
+
+    let pageSpeedResult;
+    const started = performance.now();
+
+    try {
+      const target = await normalizePublicUrl(url);
+      pageSpeedResult = await checkPageSpeed(target, pagespeedApiKey, {
+        timeoutMs: PAGESPEED_JOB_TIMEOUT_MS
+      });
+    } catch (error) {
+      pageSpeedResult = {
+        available: true,
+        ok: false,
+        partial: false,
+        status: 'error',
+        error: publicMessage(error),
+        results: {}
+      };
+    }
+
+    pageSpeedResult.pending = false;
+    pageSpeedResult.status = pageSpeedResult.ok ? 'complete' : pageSpeedResult.partial ? 'partial' : 'warning';
+    pageSpeedResult.completedAt = new Date().toISOString();
+    pageSpeedResult.durationMs = Math.round(performance.now() - started);
+
+    await mutateState((store) => {
+      const userState = getUserState(store, login);
+      const check = normalizeArray(userState.checks).find((item) => item.id === checkId);
+      if (!check) return null;
+
+      check.pagespeed = pageSpeedResult;
+      check.pageSpeedCompletedAt = pageSpeedResult.completedAt;
+      check.summary = summarizeCheck(check);
+      userState.checks = normalizeArray(userState.checks);
+      return check;
+    });
+  }
+
   function mutateState(mutator) {
     const run = stateQueue.then(async () => {
       const store = await readState();
@@ -212,6 +275,7 @@ function createToolsService({ dataDir, pagespeedApiKey = '', logger = console } 
 
   return {
     runManualCheck,
+    getCheck,
     getHistory,
     getMonitors,
     createMonitor,
@@ -250,7 +314,8 @@ async function runToolsCheck(inputUrl, options = {}) {
     wordpress: null,
     pagespeed: null
   };
-  const pageSpeedPromise = requested.includes('pagespeed')
+  const deferPageSpeed = Boolean(options.deferPageSpeed && requested.includes('pagespeed'));
+  const pageSpeedPromise = requested.includes('pagespeed') && !deferPageSpeed
     ? checkPageSpeed(target, options.pagespeedApiKey || '')
     : null;
 
@@ -273,11 +338,28 @@ async function runToolsCheck(inputUrl, options = {}) {
   if (requested.includes('seo')) check.seo = await checkSeo(target, htmlSnapshot);
   if (requested.includes('security')) check.security = await checkSecurity(target, htmlSnapshot);
   if (requested.includes('wordpress')) check.wordpress = await checkWordPress(target, htmlSnapshot);
-  if (pageSpeedPromise) check.pagespeed = await pageSpeedPromise;
+  if (deferPageSpeed) check.pagespeed = createPendingPageSpeed();
+  else if (pageSpeedPromise) check.pagespeed = await pageSpeedPromise;
 
   check.durationMs = Math.round(performance.now() - started);
   check.summary = summarizeCheck(check);
   return check;
+}
+
+function createPendingPageSpeed() {
+  return {
+    available: true,
+    ok: false,
+    partial: false,
+    pending: true,
+    status: 'running',
+    startedAt: new Date().toISOString(),
+    message: 'PageSpeed выполняется в фоне. Google Lighthouse для некоторых сайтов может идти больше минуты.',
+    results: {
+      mobile: { ok: false, pending: true },
+      desktop: { ok: false, pending: true }
+    }
+  };
 }
 
 function normalizeRequestedChecks(value) {
@@ -610,7 +692,7 @@ async function checkWordPress(target, htmlSnapshot) {
   };
 }
 
-async function checkPageSpeed(target, apiKey) {
+async function checkPageSpeed(target, apiKey, options = {}) {
   if (!apiKey) {
     return {
       available: false,
@@ -619,6 +701,7 @@ async function checkPageSpeed(target, apiKey) {
     };
   }
 
+  const timeoutMs = Number(options.timeoutMs || PAGESPEED_TIMEOUT_MS);
   const strategies = ['mobile', 'desktop'];
   const results = Object.fromEntries(
     await Promise.all(strategies.map(async (strategy) => {
@@ -634,7 +717,7 @@ async function checkPageSpeed(target, apiKey) {
     try {
       const response = await fetch(endpoint, {
         headers: { Accept: 'application/json' },
-        signal: AbortSignal.timeout(PAGESPEED_TIMEOUT_MS)
+        signal: AbortSignal.timeout(timeoutMs)
       });
       const payload = await response.json().catch(() => ({}));
       const lighthouse = payload.lighthouseResult || {};
@@ -642,9 +725,15 @@ async function checkPageSpeed(target, apiKey) {
       const runtimeError = lighthouse.runtimeError || null;
       const apiError = payload.error || null;
       const error = runtimeError?.message || apiError?.message || (response.ok ? '' : response.statusText);
+      const hasScores = Boolean(
+        categories.performance ||
+        categories.accessibility ||
+        categories['best-practices'] ||
+        categories.seo
+      );
 
       return [strategy, {
-        ok: response.ok,
+        ok: response.ok && !error && hasScores,
         statusCode: response.status,
         performanceScore: toPercent(categories.performance?.score),
         accessibilityScore: toPercent(categories.accessibility?.score),
@@ -820,7 +909,9 @@ function summarizeCheck(check) {
   if (check.seo?.warnings?.length) warnings.push(`SEO: ${check.seo.warnings[0]}`);
   if (check.security?.warnings?.length) warnings.push(`Security: ${check.security.warnings[0]}`);
   if (check.wordpress?.warnings?.length) warnings.push(`WordPress: ${check.wordpress.warnings[0]}`);
-  if (check.pagespeed && check.pagespeed.available && !check.pagespeed.ok) {
+  if (check.pagespeed?.pending) {
+    warnings.push('PageSpeed: отчет выполняется в фоне');
+  } else if (check.pagespeed && check.pagespeed.available && !check.pagespeed.ok) {
     warnings.push('PageSpeed: Google Lighthouse не смог получить полный отчет');
   }
   if (check.pagespeed?.note) warnings.push(check.pagespeed.note);

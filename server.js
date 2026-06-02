@@ -471,6 +471,21 @@ app.post('/api/tools/run', async (req, res) => {
   }
 });
 
+app.get('/api/tools/checks/:id', async (req, res) => {
+  try {
+    const session = requireAllowedProfileSession(req, res);
+    if (!session) return;
+
+    const check = await toolsService.getCheck(session.user.login, String(req.params.id || ''));
+    res.json({ ok: true, check });
+  } catch (error) {
+    res.status(error.status || 500).json({
+      ok: false,
+      error: error.publicMessage || error.message || 'Не удалось загрузить проверку сайта'
+    });
+  }
+});
+
 app.get('/api/tools/history', async (req, res) => {
   try {
     const session = requireAllowedProfileSession(req, res);

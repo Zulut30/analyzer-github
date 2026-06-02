@@ -88,6 +88,7 @@ let toolsState = {
   lastCheck: null,
   loaded: false
 };
+let toolsPollTimer = null;
 
 const themes = [
   { id: 'light', label: 'Светлая' },
@@ -1294,6 +1295,8 @@ async function runToolsCheck() {
   setToolsTab('check');
   setToolsLoading(true, 'Проверяю сайт', 'Доступность, SSL, DNS и HTML-аудит выполняются без AI-запросов.');
   hideToolsError();
+  clearToolsPoll();
+  let keepLoading = false;
 
   try {
     const response = await fetch('/api/tools/run', {
@@ -1308,12 +1311,67 @@ async function runToolsCheck() {
     toolsState.history = [payload.check, ...toolsState.history.filter((item) => item.id !== payload.check.id)].slice(0, 220);
     toolsState.loaded = false;
     renderTools();
-    showToast('Проверка сайта готова');
+    if (hasPendingPageSpeed(payload.check)) {
+      keepLoading = true;
+      setToolsLoading(true, 'PageSpeed выполняется', 'Google Lighthouse может идти 1-2 минуты. Остальные проверки уже готовы, баллы появятся автоматически.');
+      pollToolsCheck(payload.check.id);
+      showToast('Проверка готова, PageSpeed догружается');
+    } else {
+      showToast('Проверка сайта готова');
+    }
   } catch (error) {
     showToolsError(error.message);
   } finally {
-    setToolsLoading(false);
+    if (!keepLoading) setToolsLoading(false);
   }
+}
+
+function hasPendingPageSpeed(check) {
+  return Boolean(check?.pagespeed?.pending || check?.pagespeed?.status === 'running');
+}
+
+function clearToolsPoll() {
+  if (!toolsPollTimer) return;
+  window.clearTimeout(toolsPollTimer);
+  toolsPollTimer = null;
+}
+
+function upsertToolHistoryCheck(check) {
+  if (!check?.id) return;
+  toolsState.history = [check, ...toolsState.history.filter((item) => item.id !== check.id)].slice(0, 220);
+}
+
+async function pollToolsCheck(checkId, attempt = 0) {
+  if (!checkId) return;
+  clearToolsPoll();
+
+  toolsPollTimer = window.setTimeout(async () => {
+    try {
+      const response = await fetch(`/api/tools/checks/${encodeURIComponent(checkId)}`, {
+        headers: { Accept: 'application/json' }
+      });
+      const payload = await readApiResponse(response);
+      if (!response.ok || !payload.ok) throw new Error(payload.error || 'Не удалось обновить PageSpeed');
+
+      toolsState.lastCheck = payload.check;
+      upsertToolHistoryCheck(payload.check);
+      renderTools();
+
+      if (hasPendingPageSpeed(payload.check) && attempt < 80) {
+        setToolsLoading(true, 'PageSpeed выполняется', 'Google Lighthouse ещё работает. Баллы появятся автоматически после завершения.');
+        pollToolsCheck(checkId, attempt + 1);
+        return;
+      }
+
+      clearToolsPoll();
+      setToolsLoading(false);
+      if (!hasPendingPageSpeed(payload.check)) showToast('PageSpeed готов');
+    } catch (error) {
+      clearToolsPoll();
+      setToolsLoading(false);
+      showToolsError(error.message);
+    }
+  }, 5000);
 }
 
 async function createToolMonitor() {
@@ -1567,6 +1625,16 @@ function renderWordPressCard(data) {
 
 function renderPageSpeedCard(data) {
   if (!data) return '';
+  if (data.pending || data.status === 'running') {
+    return renderToolCard('PageSpeed', 'pending', [
+      ['Статус', 'выполняется'],
+      ['Mobile', 'ожидается'],
+      ['Desktop', 'ожидается']
+    ], [
+      data.message || 'Google Lighthouse выполняется в фоне. Обычно это занимает 1-2 минуты.',
+      'Остальные проверки уже готовы, AI-токены не расходуются.'
+    ]);
+  }
   if (!data.available) {
     return renderToolCard('PageSpeed', 'neutral', [['Статус', 'API key не настроен']], [data.message]);
   }
@@ -1654,6 +1722,10 @@ function renderToolsHistory() {
       toolsState.lastCheck = check;
       setToolsTab('check');
       renderTools();
+      if (hasPendingPageSpeed(check)) {
+        setToolsLoading(true, 'PageSpeed выполняется', 'Google Lighthouse ещё работает. Баллы появятся автоматически после завершения.');
+        pollToolsCheck(check.id);
+      }
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
   });
